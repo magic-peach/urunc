@@ -113,8 +113,13 @@ func (fc *Firecracker) Execve(args ExecArgs, _ unikernels.Unikernel) error {
 			fcMem = DefaultMemory
 		}
 	}
+
+	vcpuCount := DefaultVCPUs
+	if args.VCPUs != 0 {
+		vcpuCount = args.VCPUs
+	}
 	FCMachine := FirecrackerMachine{
-		VcpuCount:       1, // TODO: Use value from configuration or Environment variable
+		VcpuCount:       vcpuCount,
 		MemSizeMiB:      fcMem,
 		Smt:             false,
 		TrackDirtyPages: false,

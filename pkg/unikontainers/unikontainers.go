@@ -215,7 +215,7 @@ func (u *Unikontainer) Exec() error {
 	if vmmArgs.VCPUs == 0 {
 		if u.Config != nil && u.Config.Hypervisors != nil {
 			if hvConfig, exists := u.Config.Hypervisors[vmmType]; exists {
-				vmmArgs.VCPUs = uint16(hvConfig.DefaultVCPUs)
+				vmmArgs.VCPUs = uint(hvConfig.DefaultVCPUs)
 				uniklog.WithFields(logrus.Fields{
 					"hypervisor": vmmType,
 					"vcpus":      hvConfig.DefaultVCPUs,
