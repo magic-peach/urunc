@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	m "github.com/urunc-dev/urunc/internal/metrics"
@@ -67,34 +66,9 @@ var metrics m.Writer
 // if urunc configuration file is not found, it will create a default one
 // It also initializes the metrics writer
 func init() {
-	cfgPath := unikontainers.UruncConfigPath
-	var cfg *unikontainers.UruncConfig
-
-	// If config file does not exist, create a default one and save it
-	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		logrus.Warnf("Urunc config file %s does not exist, creating a default one", cfgPath)
-		cfg = unikontainers.DefaultUruncConfig()
-		f, err := os.OpenFile(cfgPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err != nil {
-			logrus.Warnf("Failed to create urunc config file %s: %v", cfgPath, err)
-			uruncConfig = cfg
-			return
-		}
-		defer f.Close()
-
-		encoder := toml.NewEncoder(f)
-		if err := encoder.Encode(cfg); err != nil {
-			logrus.Warnf("Failed to encode urunc config file %s: %v", cfgPath, err)
-			uruncConfig = cfg
-			return
-		}
-	} else {
-		// Config file exists, decode it
-		cfg = &unikontainers.UruncConfig{}
-		if _, err := toml.DecodeFile(cfgPath, cfg); err != nil {
-			logrus.Errorf("Failed to decode urunc config file %s: %v", cfgPath, err)
-			cfg = unikontainers.DefaultUruncConfig()
-		}
+	cfg, err := unikontainers.LoadOrCreateUruncConfig(unikontainers.UruncConfigPath)
+	if err != nil {
+		logrus.Fatalf("Failed to load or create urunc configuration: %v", err)
 	}
 
 	uruncConfig = cfg

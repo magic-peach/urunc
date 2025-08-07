@@ -75,7 +75,7 @@ func getUnikontainer(context *cli.Context) (*unikontainers.Unikontainer, error) 
 	rootDir := context.GlobalString("root")
 
 	// get Unikontainer data from state.json
-	unikontainer, err := unikontainers.Get(containerID, rootDir)
+	unikontainer, err := unikontainers.Get(containerID, rootDir, uruncConfig)
 	if err != nil {
 		if errors.Is(err, unikontainers.ErrNotUnikernel) {
 			// Exec runc to handle non unikernel containers

@@ -108,7 +108,7 @@ func createUnikontainer(context *cli.Context) (err error) {
 	}
 
 	// new unikernel from bundle
-	unikontainer, err := unikontainers.New(bundlePath, containerID, rootDir)
+	unikontainer, err := unikontainers.New(bundlePath, containerID, rootDir, uruncConfig)
 	if err != nil {
 		if errors.Is(err, unikontainers.ErrQueueProxy) ||
 			errors.Is(err, unikontainers.ErrNotUnikernel) {

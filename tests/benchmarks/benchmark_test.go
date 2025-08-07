@@ -20,10 +20,15 @@ import (
 
 	"github.com/urunc-dev/urunc/internal/constants"
 	m "github.com/urunc-dev/urunc/internal/metrics"
+	"github.com/urunc-dev/urunc/pkg/unikontainers"
 )
 
 func BenchmarkZerologWriter(b *testing.B) {
-	var zerologWriter = m.NewZerologMetrics(constants.TimestampTargetFile)
+	cfg, err := unikontainers.LoadOrCreateUruncConfig(unikontainers.UruncConfigPath)
+	if err != nil {
+		b.Fatalf("Failed to load or create urunc configuration: %v", err)
+	}
+	var zerologWriter = m.NewZerologMetrics(cfg.Timestamps.Enabled, cfg.Timestamps.Destination)
 	for i := 0; i < b.N; i++ {
 		for j := 0; j < 20; j++ {
 			zerologWriter.Capture(fmt.Sprintf("container%02d", i), fmt.Sprintf("TS%02d", j))

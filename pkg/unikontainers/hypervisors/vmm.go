@@ -24,6 +24,7 @@ import (
 )
 
 const DefaultMemory uint64 = 256 // The default memory for every hypervisor: 256 MB
+const DefaultVCPUs uint16 = 1 // The default vCPUs for every hypervisor: 1
 
 // ExecArgs holds the data required by Execve to start the VMM
 // FIXME: add extra fields if required by additional VMM's
@@ -39,6 +40,7 @@ type ExecArgs struct {
 	GuestMAC      string   // The MAC address of the guest network device
 	Seccomp       bool     // Enable or disable seccomp filters for the VMM
 	MemSizeB      uint64   // The size of the memory provided to the VM in bytes
+	VCPUs         uint16   // The number of vCPUs to allocate
 	Environment   []string // Environment
 }
 

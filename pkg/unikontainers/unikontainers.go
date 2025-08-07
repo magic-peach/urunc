@@ -37,7 +37,6 @@ import (
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
-	"github.com/urunc-dev/urunc/internal/constants"
 	m "github.com/urunc-dev/urunc/internal/metrics"
 )
 
@@ -57,10 +56,11 @@ type Unikontainer struct {
 	Spec    *specs.Spec
 	BaseDir string
 	RootDir string
+	Config  *UruncConfig
 }
 
 // New parses the bundle and creates a new Unikontainer object
-func New(bundlePath string, containerID string, rootDir string) (*Unikontainer, error) {
+func New(bundlePath string, containerID string, rootDir string, uruncConfig *UruncConfig) (*Unikontainer, error) {
 	spec, err := loadSpec(bundlePath)
 	if err != nil {
 		return nil, err
@@ -98,11 +98,12 @@ func New(bundlePath string, containerID string, rootDir string) (*Unikontainer, 
 		RootDir: rootDir,
 		Spec:    spec,
 		State:   state,
+		Config:  uruncConfig,
 	}, nil
 }
 
 // Get retrieves unikernel data from disk to create a Unikontainer object
-func Get(containerID string, rootDir string) (*Unikontainer, error) {
+func Get(containerID string, rootDir string, uruncConfig *UruncConfig) (*Unikontainer, error) {
 	u := &Unikontainer{}
 	containerDir := filepath.Join(rootDir, containerID)
 	stateFilePath := filepath.Join(containerDir, stateFilename)
@@ -122,6 +123,7 @@ func Get(containerID string, rootDir string) (*Unikontainer, error) {
 	u.BaseDir = containerDir
 	u.RootDir = rootDir
 	u.Spec = spec
+	u.Config = uruncConfig
 	return u, nil
 }
 
@@ -151,8 +153,8 @@ func (u *Unikontainer) Create(pid int) error {
 }
 
 func (u *Unikontainer) Exec() error {
-	// FIXME: We need to find a way to set the output file
-	var metrics = m.NewZerologMetrics(constants.TimestampTargetFile)
+	// Use config for metrics initialization
+	var metrics = m.NewZerologMetrics(u.Config.Timestamps.Enabled, u.Config.Timestamps.Destination)
 	metrics.Capture(u.State.ID, "TS15")
 
 	vmmType := u.State.Annotations[annotHypervisor]
@@ -184,14 +186,40 @@ func (u *Unikontainer) Exec() error {
 		BlockDevice:   "",
 		Seccomp:       true, // Enable Seccomp by default
 		MemSizeB:      0,
+		VCPUs:         0,
 		Environment:   os.Environ(),
 	}
 
-	// Check if memory limit was not set
+	// Check if memory limit was set in container spec
 	if u.Spec.Linux.Resources.Memory != nil {
 		if u.Spec.Linux.Resources.Memory.Limit != nil {
 			if *u.Spec.Linux.Resources.Memory.Limit > 0 {
 				vmmArgs.MemSizeB = uint64(*u.Spec.Linux.Resources.Memory.Limit) // nolint:gosec
+			}
+		}
+	}
+
+	// If no memory limit was set, use the default from UruncConfig for this hypervisor
+	if vmmArgs.MemSizeB == 0 {
+		if u.Config != nil && u.Config.Hypervisors != nil {
+			if hvConfig, exists := u.Config.Hypervisors[vmmType]; exists {
+				vmmArgs.MemSizeB = uint64(hvConfig.DefaultMemoryMB) * 1024 * 1024 // Convert MB to bytes
+				uniklog.WithFields(logrus.Fields{
+					"hypervisor": vmmType,
+					"memory_mb":  hvConfig.DefaultMemoryMB,
+				}).Debug("Using default memory from UruncConfig")
+			}
+		}
+	}
+
+	if vmmArgs.VCPUs == 0 {
+		if u.Config != nil && u.Config.Hypervisors != nil {
+			if hvConfig, exists := u.Config.Hypervisors[vmmType]; exists {
+				vmmArgs.VCPUs = uint16(hvConfig.DefaultVCPUs)
+				uniklog.WithFields(logrus.Fields{
+					"hypervisor": vmmType,
+					"vcpus":      hvConfig.DefaultVCPUs,
+				}).Debug("Using default vCPUs from UruncConfig")
 			}
 		}
 	}
