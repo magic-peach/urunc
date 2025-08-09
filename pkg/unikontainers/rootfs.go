@@ -280,6 +280,7 @@ func setupDev(monRootfs string, devPath string) error {
 	minor := unix.Minor(uint64(rdev))
 
 	newDev := unix.Mkdev(major, minor)
+	uniklog.Debugf("newDev: %w, %d, %d", newDev, major, minor)
 
 	// Set the correct target path
 	relHostPath, err := filepath.Rel("/", devPath)
@@ -536,6 +537,94 @@ func findQemuDataDir(basename string) (string, error) {
 	}
 
 	return qdPath, nil
+}
+
+func createDeviceNode(dstPath string, major uint32, minor uint32, uid uint32, gid uint32, permissionsString string) error {
+	// Ensure parent directory exists
+	dstDir := filepath.Dir(dstPath)
+	err := os.MkdirAll(dstDir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", dstDir, err)
+	}
+
+	// Determine device mode bits
+	// Use block device mode by default, modify if needed
+	var mode uint32 = unix.S_IFBLK // block device
+
+	// Parse permissionsString to mode bits
+	// "r" = read, "w" = write, "m" = mknod or execute permissions (commonly "rwm" for devices)
+	// Map to Linux file permission bits: 0660 for typical device nodes
+	permBits := uint32(0660)
+	// If more granular permissions are needed, parse them here
+
+	dev := unix.Mkdev(major, minor)
+
+	// Remove existing file if it exists (optional)
+	if _, err := os.Stat(dstPath); err == nil {
+		os.Remove(dstPath)
+	}
+
+	// Create device node file
+	if err := unix.Mknod(dstPath, mode|permBits, int(dev)); err != nil {
+		return fmt.Errorf("failed to create device node %s: %w", dstPath, err)
+	}
+
+	// Set ownership
+	if err := os.Chown(dstPath, int(uid), int(gid)); err != nil {
+		return fmt.Errorf("failed to chown device node %s: %w", dstPath, err)
+	}
+
+	return nil
+}
+
+func findHostDeviceForSpec(specDev specs.LinuxDevice) (string, error) {
+	files, _ := filepath.Glob("/dev/*")
+	for _, file := range files {
+		var stat unix.Stat_t
+		err := unix.Stat(file, &stat)
+		if err != nil {
+			continue
+		}
+		if int64(unix.Major(stat.Rdev)) == specDev.Major && int64(unix.Minor(stat.Rdev)) == specDev.Minor {
+			return file, nil
+		}
+	}
+	return "", fmt.Errorf("device not found by major/minor")
+}
+
+func createCSIBlockDevices(monRootfs string, dev specs.LinuxDevice) error {
+
+	path, _ := findHostDeviceForSpec(dev)
+	dstPath := filepath.Join(monRootfs, path)
+	dstDir := filepath.Dir(dstPath)
+	if err := os.MkdirAll(dstDir, 0755); err != nil {
+		return fmt.Errorf("failed to create device directory %s: %w", dstDir, err)
+	}
+	// Use Mknod to create the device node
+	mode := unix.S_IFBLK | 0660 // Block device with rw perms (adjust as needed)
+	devNumber := unix.Mkdev(uint32(dev.Major), uint32(dev.Minor))
+	if err := unix.Mknod(dstPath, uint32(mode), int(devNumber)); err != nil {
+		return fmt.Errorf("failed to create device node %s: %w", dstPath, err)
+	}
+	dev.Path = path
+
+	return nil
+}
+
+func mountBVolumes(rootfsPath string, devices []specs.LinuxDevice) error {
+	for _, d := range devices {
+		if d.Type != "b" {
+			uniklog.Debug("skipping device")
+			continue
+		}
+		uniklog.Debug("adding device")
+		err := createCSIBlockDevices(rootfsPath, d)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func mountVolumes(rootfsPath string, mounts []specs.Mount) error {

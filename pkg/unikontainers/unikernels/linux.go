@@ -70,9 +70,9 @@ func (l *Linux) CommandString() (string, error) {
 			l.Net.Mask)
 		bootParams += " " + netParams
 	}
-	for _, eVar := range l.Env {
-		bootParams += " " + eVar
-	}
+	//for _, eVar := range l.Env {
+	//	bootParams += " " + eVar
+	//}
 	if l.App != "" {
 		initParams := rdinit + "init=" + l.App + " -- " + l.Command
 		bootParams += " " + initParams

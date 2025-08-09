@@ -31,7 +31,7 @@ type ExecArgs struct {
 	Container     string   // The container ID
 	UnikernelPath string   // The path of the unikernel inside rootfs
 	TapDevice     string   // The TAP device name
-	BlockDevice   string   // The block device path
+	BlockDevices  []string // The block device path
 	InitrdPath    string   // The path to the initrd of the unikernel
 	SharedfsPath  string   // The path in the host to share with guest
 	Command       string   // The unikernel's command line

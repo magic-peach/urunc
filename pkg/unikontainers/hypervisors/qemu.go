@@ -15,9 +15,11 @@
 package hypervisors
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 	"syscall"
+	"encoding/base64"
 
 	"github.com/urunc-dev/urunc/pkg/unikontainers/unikernels"
 )
@@ -54,6 +56,20 @@ func (q *Qemu) Path() string {
 	return q.binaryPath
 }
 
+func qemuSMBIOSArgs(env []string) []string {
+    smbiosArgs := []string{}
+    for _, kv := range env {
+        parts := strings.SplitN(kv, "=", 2)
+        if len(parts) != 2 {
+            continue
+        }
+        key, val := parts[0], parts[1]
+        encoded := base64.StdEncoding.EncodeToString([]byte(val))
+        smbiosArgs = append(smbiosArgs, "-smbios", fmt.Sprintf("type=11,value=%s=%s", key, encoded))
+    }
+    return smbiosArgs
+}
+
 func (q *Qemu) Execve(args ExecArgs, ukernel unikernels.Unikernel) error {
 	qemuString := string(QemuVmm)
 	qemuMem := bytesToStringMB(args.MemSizeB)
@@ -62,6 +78,7 @@ func (q *Qemu) Execve(args ExecArgs, ukernel unikernels.Unikernel) error {
 	cmdString += " -cpu host"            // Choose CPU
 	cmdString += " -enable-kvm"          // Enable KVM to use CPU virt extensions
 	cmdString += " -nographic -vga none" // Disable graphic output
+	smbiosArgs := qemuSMBIOSArgs(args.Environment)
 
 	if args.Seccomp {
 		// Enable Seccomp in QEMU
@@ -95,14 +112,15 @@ func (q *Qemu) Execve(args ExecArgs, ukernel unikernels.Unikernel) error {
 	} else {
 		cmdString += " -nic none"
 	}
-	if args.BlockDevice != "" {
-		blockCli := ukernel.MonitorBlockCli(qemuString)
-		if blockCli == "" {
-			blockCli += " -device virtio-blk-pci,id=blk0,drive=hd0,scsi=off"
-			blockCli += " -drive format=raw,if=none,id=hd0,file="
+	if len(args.BlockDevices) > 0 {
+		for i, devPath := range args.BlockDevices {
+			id := fmt.Sprintf("blk%d", i)
+			driveId := fmt.Sprintf("hd%d", i)
+			//blockCli := ukernel.MonitorBlockCli(qemuString)
+			blockCli := fmt.Sprintf(" -device virtio-blk-pci,id=%s,drive=%s", id, driveId) +
+				fmt.Sprintf(" -drive format=raw,if=none,id=%s,file=", driveId)
+			cmdString += blockCli + devPath
 		}
-		blockCli += args.BlockDevice
-		cmdString += blockCli
 	}
 	if args.InitrdPath != "" {
 		cmdString += " -initrd " + args.InitrdPath
@@ -113,7 +131,8 @@ func (q *Qemu) Execve(args ExecArgs, ukernel unikernels.Unikernel) error {
 	}
 	cmdString += ukernel.MonitorCli(qemuString)
 	exArgs := strings.Split(cmdString, " ")
+	exArgs = append(exArgs, smbiosArgs...)
 	exArgs = append(exArgs, "-append", args.Command)
 	vmmLog.WithField("qemu command", exArgs).Debug("Ready to execve qemu")
-	return syscall.Exec(q.Path(), exArgs, args.Environment) //nolint: gosec
+	return syscall.Exec(q.Path(), exArgs, nil) //nolint: gosec
 }

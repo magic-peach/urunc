@@ -150,6 +150,32 @@ func (u *Unikontainer) Create(pid int) error {
 	return u.saveContainerState()
 }
 
+var specialVolumePaths = map[string]bool{
+    "/etc/resolv.conf": true,
+    "/etc/hosts":       true,
+    "/etc/hostname":    true,
+}
+
+func (u *Unikontainer) getSpecialVolumeMounts() []specs.Mount {
+    var specialMounts []specs.Mount
+    for _, mnt := range u.Spec.Mounts {
+        if specialVolumePaths[mnt.Destination] {
+            specialMounts = append(specialMounts, mnt)
+        }
+    }
+    return specialMounts
+}
+
+func filterMounts(mounts []specs.Mount, filter func(specs.Mount) bool) []specs.Mount {
+    var filtered []specs.Mount
+    for _, m := range mounts {
+        if filter(m) {
+            filtered = append(filtered, m)
+        }
+    }
+    return filtered
+}
+
 func (u *Unikontainer) Exec() error {
 	// FIXME: We need to find a way to set the output file
 	var metrics = m.NewZerologMetrics(constants.TimestampTargetFile)
@@ -181,10 +207,10 @@ func (u *Unikontainer) Exec() error {
 		Container:     u.State.ID,
 		UnikernelPath: unikernelPath,
 		InitrdPath:    initrdPath,
-		BlockDevice:   "",
+		BlockDevices:  []string{},
 		Seccomp:       true, // Enable Seccomp by default
 		MemSizeB:      0,
-		Environment:   os.Environ(),
+		Environment:   append(os.Environ(),u.Spec.Process.Env...),
 	}
 
 	// Check if memory limit was not set
@@ -284,17 +310,13 @@ func (u *Unikontainer) Exec() error {
 		withRootfsMount = false
 	}
 
-	// TODO: Support both mounting the rootfs and another block device.
 	if u.State.Annotations[annotBlock] != "" && unikernel.SupportsBlock() {
-		vmmArgs.BlockDevice = u.State.Annotations[annotBlock]
+		vmmArgs.BlockDevices = []string{u.State.Annotations[annotBlock]} // instead of single BlockDevice string
 		unikernelParams.RootFSType = "block"
 		if u.State.Annotations[annotBlockMntPoint] != "" {
 			unikernelParams.BlockMntPoint = u.State.Annotations[annotBlockMntPoint]
 		} else {
-			// NOTE: If the user has not specified the
-			// mount point for the block device, then we will
-			// use /data as a default mount point.
-			unikernelParams.RootFSType = "/data"
+			unikernelParams.BlockMntPoint = "/data"
 		}
 		if withRootfsMount {
 			uniklog.Warnf("Setting both Block and MountRootfs annotations is not supported yet. Only block will be used.")
@@ -331,23 +353,38 @@ func (u *Unikontainer) Exec() error {
 				return err
 			}
 			if unikernel.SupportsFS(rootFsDevice.FsType) {
+
+				specialVolumes := u.getSpecialVolumeMounts()
+				for _, vol := range specialVolumes {
+				    src := vol.Source
+				    dest := filepath.Join(rootFsDevice.Path, vol.Destination)
+				    err := copyFileExact(src, dest)
+				    if err != nil {
+					return fmt.Errorf("failed to copy volume %s to rootfs: %w", vol.Destination, err)
+				    }
+				}
+
+				// Prepare the rootfs device into the monitor rootfs
 				err = prepareDMAsBlock(rootFsDevice.Path, monRootfs, unikernelPath, uruncJSONFilename, initrdPath)
 				if err != nil {
 					return err
 				}
-				vmmArgs.BlockDevice = rootFsDevice.Device
+
+				// Initialise the slice if needed and add the rootfs device first
+				vmmArgs.BlockDevices = append(vmmArgs.BlockDevices, rootFsDevice.Device)
+
 				unikernelParams.RootFSType = "block"
-				// NOTE: Rumprun does not allow us to mount
-				// anything at '/'. As a result, we use the
-				// /data mount point for Rumprun. For all the
-				// other guests we use '/'.
+
+				// NOTE: Rumprun does not allow mounting at "/"
 				if unikernelType == "rumprun" {
 					unikernelParams.BlockMntPoint = "/data"
 				} else {
 					unikernelParams.BlockMntPoint = "/"
 				}
+
 				dmPath = rootFsDevice.Device
 			}
+
 		}
 		// If we could not use a block-based rootfs, check if we can use 9pfs
 		if unikernelParams.RootFSType == "" {
@@ -356,6 +393,38 @@ func (u *Unikontainer) Exec() error {
 				unikernelParams.RootFSType = "9pfs"
 			}
 		}
+
+		var additionalBlockDevices []string
+		for _, dev := range u.Spec.Linux.Devices {
+			if dev.Type != "b" {
+				continue
+			}
+			// Skip device if it matches rootfs device to avoid duplication
+			if dev.Path == unikernelParams.BlockMntPoint || dev.Path == u.State.Annotations[annotBlock] {
+				continue
+			}
+			uid := uint32(0)
+			gid := uint32(0)
+			if dev.UID != nil {
+				uid = *dev.UID
+			}
+			if dev.GID != nil {
+				gid = *dev.GID
+			}
+
+			// Create device node inside monRootfs
+			path, _ := findHostDeviceForSpec(dev)
+			deviceNodePath := filepath.Join(monRootfs, path)
+			err = createDeviceNode(deviceNodePath, uint32(dev.Major), uint32(dev.Minor), uid, gid, "rwm")
+			if err != nil {
+				return err
+			}
+			additionalBlockDevices = append(additionalBlockDevices, path)
+		}
+
+		// Now add any additional block devices found earlier
+		vmmArgs.BlockDevices = append(vmmArgs.BlockDevices, additionalBlockDevices...)
+
 	}
 	metrics.Capture(u.State.ID, "TS17")
 
@@ -406,6 +475,11 @@ func (u *Unikontainer) Exec() error {
 		return err
 	}
 
+	err = mountBVolumes(monRootfs, u.Spec.Linux.Devices)
+	if err != nil {
+		return err
+	}
+
 	if unikernelParams.RootFSType == "9pfs" {
 		// Mount the container's image rootfs inside the monitor rootfs
 		err := fileFromHost(monRootfs, rootfsDir, containerRootfsMountPath, unix.MS_BIND|unix.MS_PRIVATE, false)
@@ -413,7 +487,15 @@ func (u *Unikontainer) Exec() error {
 			return err
 		}
 		newCntrRootfs := filepath.Join(monRootfs, containerRootfsMountPath)
-		err = mountVolumes(newCntrRootfs, u.Spec.Mounts)
+		filteredMounts := filterMounts(u.Spec.Mounts, func(m specs.Mount) bool {
+			return !specialVolumePaths[m.Destination]
+		})
+		err = mountVolumes(newCntrRootfs, filteredMounts)
+		if err != nil {
+			return err
+		}
+
+		err = mountVolumes(newCntrRootfs, filteredMounts)
 		if err != nil {
 			return err
 		}

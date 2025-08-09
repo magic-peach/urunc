@@ -61,6 +61,38 @@ func getInitPid(filePath string) (float64, error) {
 	return initProcessPID, nil
 }
 
+
+// copy src to dest
+// creates dest Dir if needed, and all necessary parent directories
+func copyFileExact(src, dest string) error {
+    // Open source file
+    srcFile, err := os.Open(src)
+    if err != nil {
+        return err
+    }
+    defer srcFile.Close()
+
+    // Create parent directories for dest
+    err = os.MkdirAll(filepath.Dir(dest), 0755)
+    if err != nil {
+        return err
+    }
+
+    // Create destination file
+    destFile, err := os.Create(dest)
+    if err != nil {
+        return err
+    }
+    defer destFile.Close()
+
+    // Copy contents
+    _, err = io.Copy(destFile, srcFile)
+    if err != nil {
+        return err
+    }
+    return nil
+}
+
 // copy sourceFile to targetDir
 // creates targetDir and all necessary parent directories
 func copyFile(sourceFile string, targetDir string) error {
