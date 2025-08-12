@@ -294,7 +294,7 @@ func (u *Unikontainer) Exec() error {
 			// NOTE: If the user has not specified the
 			// mount point for the block device, then we will
 			// use /data as a default mount point.
-			unikernelParams.RootFSType = "/data"
+			unikernelParams.RootFSType = "block"
 		}
 		if withRootfsMount {
 			uniklog.Warnf("Setting both Block and MountRootfs annotations is not supported yet. Only block will be used.")
@@ -351,8 +351,13 @@ func (u *Unikontainer) Exec() error {
 		}
 		// If we could not use a block-based rootfs, check if we can use 9pfs
 		if unikernelParams.RootFSType == "" {
-			if unikernel.SupportsFS("9pfs") && vmm.SupportsSharedfs() {
+			if unikernel.SupportsFS("virtiofs") && vmm.SupportsSharedfs() {
 				vmmArgs.SharedfsPath = containerRootfsMountPath
+				vmmArgs.SharedfsType = "virtiofs"
+				unikernelParams.RootFSType = "virtiofs"
+			} else if unikernel.SupportsFS("9pfs") && vmm.SupportsSharedfs() {
+				vmmArgs.SharedfsPath = containerRootfsMountPath
+				vmmArgs.SharedfsType = "9pfs"
 				unikernelParams.RootFSType = "9pfs"
 			}
 		}
@@ -406,7 +411,7 @@ func (u *Unikontainer) Exec() error {
 		return err
 	}
 
-	if unikernelParams.RootFSType == "9pfs" {
+	if unikernelParams.RootFSType == "9pfs" || unikernelParams.RootFSType == "virtiofs" {
 		// Mount the container's image rootfs inside the monitor rootfs
 		err := fileFromHost(monRootfs, rootfsDir, containerRootfsMountPath, unix.MS_BIND|unix.MS_PRIVATE, false)
 		if err != nil {
@@ -423,6 +428,13 @@ func (u *Unikontainer) Exec() error {
 			vmmArgs.InitrdPath = filepath.Join(containerRootfsMountPath, vmmArgs.InitrdPath)
 		}
 	}
+	if unikernelParams.RootFSType == "virtiofs" {
+		// Get the virtiofsd binary fromhost in monRootfs
+		err := fileFromHost(monRootfs, "/usr/libexec/virtiofsd", "", unix.MS_BIND|unix.MS_PRIVATE, false)
+		if err != nil {
+			return err
+		}
+	}
 
 	withPivot := containsNS(u.Spec.Linux.Namespaces, specs.MountNamespace)
 	err = changeRoot(monRootfs, withPivot)
@@ -435,6 +447,15 @@ func (u *Unikontainer) Exec() error {
 	if err != nil {
 		return err
 	}
+
+	if unikernelParams.RootFSType == "virtiofs" {
+		// Start the virtiofsd process
+		err = spawnVirtiofsd(containerRootfsMountPath)
+		if err != nil {
+			return err
+		}
+	}
+
 	uniklog.Debug("calling vmm execve")
 	metrics.Capture(u.State.ID, "TS18")
 	// metrics.Wait()

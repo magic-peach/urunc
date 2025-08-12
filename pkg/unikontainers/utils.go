@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -217,3 +218,23 @@ func convertUint32ToIntSlice(valSlice []uint32, size int) []int {
 // 	}
 // 	return data.Bytes(), nil
 // }
+
+func spawnVirtiofsd(sharedPath string) error {
+	cmd := exec.Command(
+		"/usr/libexec/virtiofsd",
+		"--socket-path=/tmp/vhostqemu",
+		"-o", "source="+sharedPath,
+		"-o", "cache=always",
+	)
+
+	// Pass through stdout/stderr so you can see the output
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	// TODO handle execution of virtiofsd
+	return nil
+}
