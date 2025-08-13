@@ -178,12 +178,17 @@ func prepareMonRootfs(monRootfs string, monitorPath string, dmPath string, needs
 		return err
 	}
 
-	err = createTmpfs(monRootfs, "/dev", unix.MS_NOSUID|unix.MS_STRICTATIME, "755")
+	err = createTmpfs(monRootfs, "/dev", unix.MS_NOSUID|unix.MS_STRICTATIME, "755", "65536k")
 	if err != nil {
 		return err
 	}
 
-	err = createTmpfs(monRootfs, "/tmp", unix.MS_NOSUID|unix.MS_NOEXEC|unix.MS_STRICTATIME, "1777")
+	err = createTmpfs(monRootfs, "/tmp", unix.MS_NOSUID|unix.MS_NOEXEC|unix.MS_STRICTATIME, "1777", "65536k")
+	if err != nil {
+		return err
+	}
+
+	err = createTmpfs(monRootfs, "/dev/shm", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, "1777", "2097152k")
 	if err != nil {
 		return err
 	}
@@ -226,10 +231,10 @@ func prepareMonRootfs(monRootfs string, monitorPath string, dmPath string, needs
 // In particular, it is used for the creation of /tmp and /dev.
 // This is necessary to create the required devices for the monitor execution,
 // such as KVM, null, urandom etc.
-func createTmpfs(monRootfs string, path string, flags uint64, mode string) error {
+func createTmpfs(monRootfs string, path string, flags uint64, mode string, size string) error {
 	dstPath := filepath.Join(monRootfs, path)
 	mountType := "tmpfs"
-	data := "mode=" + mode + ",size=65536k"
+	data := "mode=" + mode + ",size=" + size
 
 	err := os.MkdirAll(dstPath, 0755)
 	if err != nil {

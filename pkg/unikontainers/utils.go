@@ -223,8 +223,12 @@ func spawnVirtiofsd(sharedPath string) error {
 	cmd := exec.Command(
 		"/usr/libexec/virtiofsd",
 		"--socket-path=/tmp/vhostqemu",
-		"-o", "source="+sharedPath,
-		"-o", "cache=always",
+		"--shared-dir",
+		sharedPath,
+		"--cache",
+		"always",
+		"--sandbox",
+		"none",
 	)
 
 	// Pass through stdout/stderr so you can see the output
