@@ -126,7 +126,12 @@ func (l *Linux) MonitorCli(monitor string) string {
 	switch monitor {
 	case "qemu":
 		monOpts := " -no-reboot -serial stdio -nodefaults"
-		monOpts += "  -smbios type=11,path=/tmp/envs.txt"
+		allEnvs := strings.Join(l.Env, "\n")
+		// TODO: We might want to return the error here.
+		err := os.WriteFile("/tmp/envs.txt", []byte(allEnvs), 0644)
+		if err == nil {
+			monOpts += " -smbios type=11,path=/tmp/envs.txt"
+		}
 		return monOpts
 	default:
 		return ""
@@ -167,11 +172,6 @@ func (l *Linux) Init(data UnikernelParams) error {
 
 	l.RootFsType = data.RootFSType
 	l.Env = data.EnvVars
-	allEnvs := strings.Join(l.Env, "\n")
-	err := os.WriteFile("/tmp/envs.txt", []byte(allEnvs), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write environment variables to /tmp/envs.txt: %v", err)
-	}
 	return nil
 }
 
