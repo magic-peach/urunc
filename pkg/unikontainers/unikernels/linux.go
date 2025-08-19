@@ -16,6 +16,7 @@ package unikernels
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 )
@@ -73,11 +74,12 @@ func (l *Linux) CommandString() (string, error) {
 			l.Net.Mask)
 		bootParams += " " + netParams
 	}
-	for _, eVar := range l.Env {
-		bootParams += " " + eVar
-	}
+	//for _, eVar := range l.Env {
+	//	bootParams += " " + eVar
+	//}
 	if l.App != "" {
-		initParams := rdinit + "init=" + l.App + " -- " + l.Command
+		initParams := "URUNIT_ENVS=1 "
+		initParams += rdinit + "init=" + l.App + " -- " + l.Command
 		bootParams += " " + initParams
 	}
 
@@ -123,7 +125,9 @@ func (l *Linux) MonitorBlockCli(monitor string) string {
 func (l *Linux) MonitorCli(monitor string) string {
 	switch monitor {
 	case "qemu":
-		return " -no-reboot -serial stdio -nodefaults"
+		monOpts := " -no-reboot -serial stdio -nodefaults"
+		monOpts += "  -smbios type=11,path=/tmp/envs.txt"
+		return monOpts
 	default:
 		return ""
 	}
@@ -163,6 +167,11 @@ func (l *Linux) Init(data UnikernelParams) error {
 
 	l.RootFsType = data.RootFSType
 	l.Env = data.EnvVars
+	allEnvs := strings.Join(l.Env, "\n")
+	err := os.WriteFile("/tmp/envs.txt", []byte(allEnvs), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write environment variables to /tmp/envs.txt: %v", err)
+	}
 	return nil
 }
 
