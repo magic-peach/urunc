@@ -126,7 +126,7 @@ func (l *Linux) MonitorCli(monitor string) string {
 	switch monitor {
 	case "qemu":
 		monOpts := " -no-reboot -serial stdio -nodefaults"
-		allEnvs := strings.Join(l.Env, "\n")
+		allEnvs := "UES\n"+strings.Join(l.Env, "\n")+"\nUEE\n"
 		// TODO: We might want to return the error here.
 		err := os.WriteFile("/tmp/envs.txt", []byte(allEnvs), 0644)
 		if err == nil {
