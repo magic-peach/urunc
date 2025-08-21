@@ -32,6 +32,9 @@ type Unikernel interface {
 type UnikernelParams struct {
 	CmdLine          []string // The cmdline provided by the image
 	EnvVars          []string // The environment variables provided by the image
+	UID              uint32   // The UID from container's config
+	GID              uint32   // The GID from container's config
+	Workdir          string   // The Workdir from container's config
 	EthDeviceIP      string   // The eth device IP
 	EthDeviceMask    string   // The eth device mask
 	EthDeviceGateway string   // The eth device gateway

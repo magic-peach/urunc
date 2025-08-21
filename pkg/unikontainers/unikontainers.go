@@ -206,6 +206,9 @@ func (u *Unikontainer) Exec() error {
 	unikernelParams := unikernels.UnikernelParams{
 		CmdLine:       u.Spec.Process.Args,
 		EnvVars:       u.Spec.Process.Env,
+		UID:           u.Spec.Process.User.UID,
+		GID:           u.Spec.Process.User.GID,
+		Workdir:       u.Spec.Process.Cwd,
 		Version:       unikernelVersion,
 		BlockMntPoint: "",
 	}
