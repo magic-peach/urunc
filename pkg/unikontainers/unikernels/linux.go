@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -29,6 +30,9 @@ type Linux struct {
 	Env        []string
 	Net        LinuxNet
 	RootFsType string
+	UID	   string
+	GID	   string
+	Workdir	   string
 }
 
 type LinuxNet struct {
@@ -122,8 +126,14 @@ func (l *Linux) MonitorCli(monitor string) string {
 	case "qemu":
 		monOpts := " -no-reboot -serial stdio -nodefaults"
 		allEnvs := "UES\n"+strings.Join(l.Env, "\n")+"\nUEE\n"
+		execConfig := "UCS\n"
+		execConfig += "UID:" + l.UID + "\n"
+		execConfig += "GID:" + l.GID + "\n"
+		execConfig += "WD:" + l.Workdir + "\n"
+		execConfig += "UCE\n"
+		allConfig := allEnvs + execConfig
 		// TODO: We might want to return the error here.
-		err := os.WriteFile("/tmp/envs.txt", []byte(allEnvs), 0644)
+		err := os.WriteFile("/tmp/envs.txt", []byte(allConfig), 0644)
 		if err == nil {
 			monOpts += " -smbios type=11,path=/tmp/envs.txt"
 		}
@@ -167,6 +177,9 @@ func (l *Linux) Init(data UnikernelParams) error {
 
 	l.RootFsType = data.RootFSType
 	l.Env = data.EnvVars
+	l.UID = strconv.FormatUint(uint64(data.UID), 10)
+	l.GID = strconv.FormatUint(uint64(data.GID), 10)
+	l.Workdir = data.Workdir
 	return nil
 }
 
