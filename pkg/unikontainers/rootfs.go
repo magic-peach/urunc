@@ -183,12 +183,7 @@ func prepareMonRootfs(monRootfs string, monitorPath string, dmPath string, needs
 		return err
 	}
 
-	err = createTmpfs(monRootfs, "/tmp", unix.MS_NOSUID|unix.MS_NOEXEC|unix.MS_STRICTATIME, "1777", "65536k")
-	if err != nil {
-		return err
-	}
-
-	err = createTmpfs(monRootfs, "/dev/shm", unix.MS_NOSUID|unix.MS_NODEV|unix.MS_NOEXEC, "1777", "2097152k")
+	err = createTmpfs(monRootfs, "/tmp", unix.MS_NOSUID|unix.MS_NOEXEC|unix.MS_STRICTATIME, "1777", "2097152k")
 	if err != nil {
 		return err
 	}
