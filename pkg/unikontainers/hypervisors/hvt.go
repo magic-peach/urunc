@@ -155,7 +155,12 @@ func (h *HVT) Execve(args ExecArgs, ukernel unikernels.Unikernel) error {
 		cmdString += " "
 		cmdString += ukernel.MonitorNetCli(hvtString, args.TapDevice, args.GuestMAC)
 	}
-	cmdString = appendNonEmpty(cmdString, " "+ukernel.MonitorBlockCli(hvtString), args.BlockDevice)
+	for _, blockImg := range args.BlockDevices {
+		cmdString = appendNonEmpty(
+			cmdString,
+			" ",
+			ukernel.MonitorBlockCli(hvtString, blockImg.Source, blockImg.ID))
+	}
 	cmdString = appendNonEmpty(cmdString, " ", ukernel.MonitorCli(hvtString))
 	cmdString += " " + args.UnikernelPath + " " + args.Command
 	cmdArgs := strings.Split(cmdString, " ")

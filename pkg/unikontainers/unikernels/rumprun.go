@@ -144,10 +144,15 @@ func (r *Rumprun) MonitorNetCli(monitor string, ifName string, mac string) strin
 	}
 }
 
-func (r *Rumprun) MonitorBlockCli(monitor string) string {
+func (r *Rumprun) MonitorBlockCli(monitor string, file string, id string) string {
 	switch monitor {
 	case "hvt", "spt":
-		return "--block:rootfs="
+		// TODO: Check if Rumprun supports multiple block devices
+		// and add support for it.
+		if id != "rootfs" {
+			return ""
+		}
+		return "--block:rootfs=" + file
 	default:
 		return ""
 	}

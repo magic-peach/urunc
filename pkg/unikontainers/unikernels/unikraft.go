@@ -89,7 +89,7 @@ func (u *Unikraft) MonitorNetCli(_ string, _ string, _ string) string {
 }
 
 // We have not managed to make Unikraft run with block yet.
-func (u *Unikraft) MonitorBlockCli(_ string) string {
+func (u *Unikraft) MonitorBlockCli(_ string, _ string, _ string) string {
 	return ""
 }
 

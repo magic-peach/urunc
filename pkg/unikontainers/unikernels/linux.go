@@ -110,11 +110,14 @@ func (l *Linux) MonitorNetCli(_ string, _ string, _ string) string {
 	return ""
 }
 
-func (l *Linux) MonitorBlockCli(monitor string) string {
+func (l *Linux) MonitorBlockCli(monitor string, file string, id string) string {
 	switch monitor {
 	case "qemu":
-		bcli := " -device virtio-blk-pci,id=blk0,drive=hd0"
-		bcli += " -drive format=raw,if=none,id=hd0,file="
+		bcli := " -device virtio-blk-pci,drive=hd0"
+		bcli += ",drive="+id
+		bcli += " -drive format=raw,if=none"
+		bcli += ",id="+id
+		bcli += ",file="+file
 		return bcli
 	default:
 		return ""

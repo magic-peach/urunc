@@ -25,13 +25,19 @@ import (
 
 const DefaultMemory uint64 = 256 // The default memory for every hypervisor: 256 MB
 
+type BlockImage struct {
+	Source string
+	Dest   string
+	ID     string
+}
+
 // ExecArgs holds the data required by Execve to start the VMM
 // FIXME: add extra fields if required by additional VMM's
 type ExecArgs struct {
 	Container     string   // The container ID
 	UnikernelPath string   // The path of the unikernel inside rootfs
 	TapDevice     string   // The TAP device name
-	BlockDevice   string   // The block device path
+	BlockDevices  []BlockImage   // The block device path
 	InitrdPath    string   // The path to the initrd of the unikernel
 	SharedfsPath  string   // The path in the host to share with guest
 	Command       string   // The unikernel's command line

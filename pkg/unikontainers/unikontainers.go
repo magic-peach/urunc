@@ -181,7 +181,7 @@ func (u *Unikontainer) Exec() error {
 		Container:     u.State.ID,
 		UnikernelPath: unikernelPath,
 		InitrdPath:    initrdPath,
-		BlockDevice:   "",
+		BlockDevices:  []hypervisors.BlockImage{},
 		Seccomp:       true, // Enable Seccomp by default
 		MemSizeB:      0,
 		Environment:   os.Environ(),
@@ -289,7 +289,12 @@ func (u *Unikontainer) Exec() error {
 
 	// TODO: Support both mounting the rootfs and another block device.
 	if u.State.Annotations[annotBlock] != "" && unikernel.SupportsBlock() {
-		vmmArgs.BlockDevice = u.State.Annotations[annotBlock]
+		newBlockImg := hypervisors.BlockImage{
+			Source: u.State.Annotations[annotBlock],
+			ID:     "rootfs",
+			Dest:   "/",
+		}
+		vmmArgs.BlockDevices = append(vmmArgs.BlockDevices, newBlockImg)
 		unikernelParams.RootFSType = "block"
 		if u.State.Annotations[annotBlockMntPoint] != "" {
 			unikernelParams.BlockMntPoint = u.State.Annotations[annotBlockMntPoint]
@@ -338,7 +343,10 @@ func (u *Unikontainer) Exec() error {
 				if err != nil {
 					return err
 				}
-				vmmArgs.BlockDevice = rootFsDevice.Device
+				newBlockImg := hypervisors.BlockImage{
+					Source: rootFsDevice.Device,
+					ID:     "rootfs",
+				}
 				unikernelParams.RootFSType = "block"
 				// NOTE: Rumprun does not allow us to mount
 				// anything at '/'. As a result, we use the
@@ -346,9 +354,12 @@ func (u *Unikontainer) Exec() error {
 				// other guests we use '/'.
 				if unikernelType == "rumprun" {
 					unikernelParams.BlockMntPoint = "/data"
+					newBlockImg.Dest = "/data"
 				} else {
 					unikernelParams.BlockMntPoint = "/"
+					newBlockImg.Dest = "/"
 				}
+				vmmArgs.BlockDevices = append(vmmArgs.BlockDevices, newBlockImg)
 				dmPath = rootFsDevice.Device
 			}
 		}

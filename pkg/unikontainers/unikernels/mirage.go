@@ -61,10 +61,17 @@ func (m *Mirage) MonitorNetCli(monitor string, ifName string, mac string) string
 	}
 }
 
-func (m *Mirage) MonitorBlockCli(monitor string) string {
+func (m *Mirage) MonitorBlockCli(monitor string, file string, id string) string {
 	switch monitor {
 	case "hvt", "spt":
-		return "--block:storage="
+		// For the time being, we only have support
+		// for a single block device in MIrage.
+		// TODO: Check Mirage and add support for more
+		// block devices.
+		if id != "rootfs" {
+			return ""
+		}
+		return "--block:storage=" + file
 	default:
 		return ""
 	}

@@ -133,12 +133,15 @@ func (fc *Firecracker) Execve(args ExecArgs, _ unikernels.Unikernel) error {
 	// TODO: Add support for block devices in FIrecracker
 	FCDrives := make([]FirecrackerDrive, 0)
 
-	if args.BlockDevice != "" {
+	for _, blockImg := range args.BlockDevices {
 		aBlock := FirecrackerDrive{
-			DriveID:   "rootfs",
+			DriveID:   blockImg.ID,
 			IsRO:      false,
-			IsRootDev: true,
-			HostPath:  args.BlockDevice,
+			IsRootDev: false,
+			HostPath:  blockImg.Source,
+		}
+		if blockImg.ID == "rootfs" {
+			aBlock.IsRootDev = true
 		}
 		FCDrives = append(FCDrives, aBlock)
 	}

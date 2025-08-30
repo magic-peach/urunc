@@ -69,7 +69,12 @@ func (s *SPT) Execve(args ExecArgs, ukernel unikernels.Unikernel) error {
 		cmdString += " "
 		cmdString += ukernel.MonitorNetCli(sptString, args.TapDevice, args.GuestMAC)
 	}
-	cmdString = appendNonEmpty(cmdString, " "+ukernel.MonitorBlockCli(sptString), args.BlockDevice)
+	for _, blockImg := range args.BlockDevices {
+		cmdString = appendNonEmpty(
+			cmdString,
+			" ",
+			ukernel.MonitorBlockCli(sptString, blockImg.Source, blockImg.ID))
+	}
 	cmdString = appendNonEmpty(cmdString, " ", ukernel.MonitorCli(sptString))
 	cmdString += " " + args.UnikernelPath + " " + args.Command
 	cmdArgs := strings.Split(cmdString, " ")

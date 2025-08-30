@@ -24,7 +24,7 @@ type Unikernel interface {
 	SupportsBlock() bool
 	SupportsFS(string) bool
 	MonitorNetCli(string, string, string) string
-	MonitorBlockCli(string) string
+	MonitorBlockCli(string, string, string) string
 	MonitorCli(string) string
 }
 
