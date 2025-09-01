@@ -438,6 +438,15 @@ func (u *Unikontainer) Exec() error {
 		}
 	}
 
+	if unikernelParams.RootFSType == "block" {
+		blockVols, err := getBlockVolumes(monRootfs, u.Spec.Mounts, unikernel)
+		if err != nil {
+			return err
+		}
+		vmmArgs.BlockDevices = append(vmmArgs.BlockDevices, blockVols...)
+		uniklog.Debug(vmmArgs.BlockDevices)
+	}
+
 	withPivot := containsNS(u.Spec.Linux.Namespaces, specs.MountNamespace)
 	err = changeRoot(monRootfs, withPivot)
 	if err != nil {

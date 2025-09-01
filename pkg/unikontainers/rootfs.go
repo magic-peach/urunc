@@ -21,12 +21,16 @@ package unikontainers
 
 import (
 	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 
 	"golang.org/x/sys/unix"
+	"github.com/moby/sys/mount"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/urunc-dev/urunc/pkg/unikontainers/unikernels"
+	"github.com/urunc-dev/urunc/pkg/unikontainers/hypervisors"
 )
 
 type mountFlagStruct struct {
@@ -585,6 +589,53 @@ func mountVolumes(rootfsPath string, mounts []specs.Mount) error {
 	}
 
 	return nil
+}
+
+// Search all the mount entries in the container's config and
+// find the ones that come from a block.
+func getBlockVolumes(monRootfs string, mounts []specs.Mount, ukernel unikernels.Unikernel) ([]hypervisors.BlockImage, error) {
+//func getBlockVolumes(mounts []specs.Mount, ukernel unikernels.Unikernel) error {
+	blkImgs := []hypervisors.BlockImage {}
+	for i, m := range mounts {
+		// We check only bind mounts
+		if m.Type != "bind" {
+			continue
+		}
+		// Get the information of the source path
+		// from /proc/self/mountinfo
+		blkDev, err := getBlockDevice(m.Source)
+		if errors.Is(err, ErrMountpoint) {
+			// ErrMountPoint means we did not find any
+			// such mount and hence we can skip it.
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		if ukernel.SupportsFS(blkDev.FsType) {
+			err = mount.Unmount(blkDev.Path)
+			if err != nil {
+				// TODO: We might want to handle better this case
+				// For example, maybe we should not return
+				// show the error but continue.
+				return nil, err
+			}
+			err = setupDev(monRootfs, blkDev.Device)
+			if err != nil {
+				// TODO: We might want to handle better this case
+				// For example, maybe we should not return
+				// show the error but continue.
+				return nil, err
+			}
+			oneBlockDev := hypervisors.BlockImage{
+				Source: blkDev.Device,
+				Dest:   m.Destination,
+				ID:     fmt.Sprintf("vol%d", i),
+			}
+			blkImgs = append(blkImgs, oneBlockDev)
+		}
+	}
+
+	return blkImgs, nil
 }
 
 // mapMountFlag retrieves the mount flags of a mount entry
