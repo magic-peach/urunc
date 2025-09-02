@@ -29,6 +29,7 @@ type Linux struct {
 	Command    string
 	Env        []string
 	Net        LinuxNet
+	Blocks     []BlockDev
 	RootFsType string
 	UID	   string
 	GID	   string
@@ -116,7 +117,7 @@ func (l *Linux) MonitorBlockCli(monitor string, file string, id string) string {
 		bcli := " -device virtio-blk-pci,drive=hd0"
 		bcli += ",drive="+id
 		bcli += " -drive format=raw,if=none"
-		bcli += ",id="+id
+		bcli += ",id="+id+",serial="+id
 		bcli += ",file="+file
 		return bcli
 	default:
@@ -134,7 +135,19 @@ func (l *Linux) MonitorCli(monitor string) string {
 		execConfig += "GID:" + l.GID + "\n"
 		execConfig += "WD:" + l.Workdir + "\n"
 		execConfig += "UCE\n"
+		blockConfig := "UBS\n"
+		for _, b := range l.Blocks {
+			if b.ID == "rootfs" {
+				continue
+			}
+			blockConfig += "ID:" + b.ID + "\n"
+			blockConfig += "MP:" + b.MountPoint + "\n"
+		}
+		blockConfig += "UBE\n"
 		allConfig := allEnvs + execConfig
+		if len(l.Blocks) > 0 {
+			allConfig += blockConfig
+		}
 		// TODO: We might want to return the error here.
 		err := os.WriteFile("/tmp/envs.txt", []byte(allConfig), 0644)
 		if err == nil {
@@ -183,6 +196,7 @@ func (l *Linux) Init(data UnikernelParams) error {
 	l.UID = strconv.FormatUint(uint64(data.UID), 10)
 	l.GID = strconv.FormatUint(uint64(data.GID), 10)
 	l.Workdir = data.Workdir
+	l.Blocks = data.Blocks
 	return nil
 }
 

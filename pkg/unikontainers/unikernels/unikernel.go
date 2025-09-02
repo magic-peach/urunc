@@ -28,6 +28,11 @@ type Unikernel interface {
 	MonitorCli(string) string
 }
 
+type BlockDev struct {
+	MountPoint	string
+	ID		string
+}
+
 // UnikernelParams holds the data required to build the unikernels commandline
 type UnikernelParams struct {
 	CmdLine          []string // The cmdline provided by the image
@@ -38,6 +43,7 @@ type UnikernelParams struct {
 	EthDeviceIP      string   // The eth device IP
 	EthDeviceMask    string   // The eth device mask
 	EthDeviceGateway string   // The eth device gateway
+	Blocks       	 []BlockDev
 	RootFSType       string   // The rootfs type of the Unikernel
 	BlockMntPoint    string   // The mount point for the block device
 	Version          string   // The version of the unikernel

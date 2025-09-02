@@ -211,6 +211,7 @@ func (u *Unikontainer) Exec() error {
 		Workdir:       u.Spec.Process.Cwd,
 		Version:       unikernelVersion,
 		BlockMntPoint: "",
+		Blocks:     []unikernels.BlockDev{},
 	}
 	if len(unikernelParams.CmdLine) == 0 {
 		unikernelParams.CmdLine = strings.Fields(u.State.Annotations[annotCmdLine])
@@ -373,6 +374,13 @@ func (u *Unikontainer) Exec() error {
 	}
 	metrics.Capture(u.State.ID, "TS17")
 
+	for _, blk := range vmmArgs.BlockDevices {
+		tmpBlockDev := unikernels.BlockDev {
+			MountPoint:	blk.Dest,
+			ID:		blk.ID,
+		}
+		unikernelParams.Blocks = append(unikernelParams.Blocks, tmpBlockDev)
+	}
 	err = unikernel.Init(unikernelParams)
 	if err == unikernels.ErrUndefinedVersion || err == unikernels.ErrVersionParsing {
 		uniklog.WithError(err).Error("an error occurred while initializing the unikernel")
