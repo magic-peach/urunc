@@ -374,27 +374,6 @@ func (u *Unikontainer) Exec() error {
 	}
 	metrics.Capture(u.State.ID, "TS17")
 
-	for _, blk := range vmmArgs.BlockDevices {
-		tmpBlockDev := unikernels.BlockDev {
-			MountPoint:	blk.Dest,
-			ID:		blk.ID,
-		}
-		unikernelParams.Blocks = append(unikernelParams.Blocks, tmpBlockDev)
-	}
-	err = unikernel.Init(unikernelParams)
-	if err == unikernels.ErrUndefinedVersion || err == unikernels.ErrVersionParsing {
-		uniklog.WithError(err).Error("an error occurred while initializing the unikernel")
-	} else if err != nil {
-		return err
-	}
-
-	// build the unikernel command
-	unikernelCmd, err := unikernel.CommandString()
-	if err != nil {
-		return err
-	}
-	vmmArgs.Command = unikernelCmd
-
 	// update urunc.json state
 	// TODO: Move this somewhere else. We are not yet running and
 	// maybe we need to make sure the monitor started correctly before
@@ -454,6 +433,27 @@ func (u *Unikontainer) Exec() error {
 		vmmArgs.BlockDevices = append(vmmArgs.BlockDevices, blockVols...)
 		uniklog.Debug(vmmArgs.BlockDevices)
 	}
+
+	for _, blk := range vmmArgs.BlockDevices {
+		tmpBlockDev := unikernels.BlockDev {
+			MountPoint:	blk.Dest,
+			ID:		blk.ID,
+		}
+		unikernelParams.Blocks = append(unikernelParams.Blocks, tmpBlockDev)
+	}
+	err = unikernel.Init(unikernelParams)
+	if err == unikernels.ErrUndefinedVersion || err == unikernels.ErrVersionParsing {
+		uniklog.WithError(err).Error("an error occurred while initializing the unikernel")
+	} else if err != nil {
+		return err
+	}
+
+	// build the unikernel command
+	unikernelCmd, err := unikernel.CommandString()
+	if err != nil {
+		return err
+	}
+	vmmArgs.Command = unikernelCmd
 
 	withPivot := containsNS(u.Spec.Linux.Namespaces, specs.MountNamespace)
 	err = changeRoot(monRootfs, withPivot)

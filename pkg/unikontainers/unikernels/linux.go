@@ -115,9 +115,9 @@ func (l *Linux) MonitorBlockCli(monitor string, file string, id string) string {
 	switch monitor {
 	case "qemu":
 		bcli := " -device virtio-blk-pci,drive=hd0"
-		bcli += ",drive="+id
+		bcli += ",drive="+id+",serial="+id
 		bcli += " -drive format=raw,if=none"
-		bcli += ",id="+id+",serial="+id
+		bcli += ",id="+id
 		bcli += ",file="+file
 		return bcli
 	default:
