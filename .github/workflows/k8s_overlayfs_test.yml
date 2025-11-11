@@ -1,0 +1,129 @@
+name: Kubernetes test with overlayfs
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ''
+      runner:
+        type: string
+        default: '["base", "dind", "2204"]'
+      runner-archs:
+        type: string
+        default: '["amd64", "arm64"]'
+      runner-arch-map:
+        type: string
+        default: '[{"amd64":"x86_64", "arm64":"aarch64", "arm":"armv7l"}]'
+      firecracker_version:
+        type: string
+        required: true
+      solo5_version:
+        type: string
+        required: true
+      kind_version:
+        required: true
+        type: string
+    secrets:
+      GIT_CLONE_PAT:
+        required: false
+  workflow_dispatch:     
+
+permissions:
+  contents: read
+
+jobs:
+  base-kind-and-urunc-setup:
+    name: Base setup of kind with urunc
+    uses: ./.github/workflows/kind_setup.yml
+    with:
+      ref: ${{ inputs.ref }}
+      firecracker_version: ${{ inputs.firecracker_version }}
+      solo5_version: ${{ inputs.solo5_version }}
+      kind_version: ${{ inputs.kind_version }}
+
+  setup-overlayfs:
+    name: Setup overlayfs as default snapshotter
+    needs: base-kind-and-urunc-setup
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+      fail-fast: false
+    steps:
+    - name: Set snapshotter to overlayfs
+      run: |
+        docker exec urunc-test-control-plane bash -c \
+        'sed -i "s/snapshotter = \"devmapper\"/snapshotter = \"overlayfs\"/g" /etc/containerd/config.toml'
+
+    - name: Restart containerd inside urunc-test-control-plane
+      run: |
+        docker exec urunc-test-control-plane bash -c "
+          systemctl stop containerd
+          rm -f /var/lib/containerd/io.containerd.metadata.v1.bolt/meta.db
+          systemctl restart containerd
+          sleep 5
+          systemctl status containerd
+        "
+
+  test-hello-world-spt:
+    name: Hello world rumprun spt
+    needs: setup-overlayfs
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+      fail-fast: false
+    steps:
+    - name: Deploy hello world rumprun unikernel over Solo5-spt
+      run: |
+        cat <<EOF | kubectl apply -f -
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              name: hello-spt-rumprun-block
+              labels:
+                run: hello-spt-rumprun-block
+            spec:
+              runtimeClassName: urunc
+              containers:
+                - name: hello-spt-rumprun-block
+                  image: harbor.nbfc.io/nubificus/urunc/hello-spt-rumprun-block:latest
+                  imagePullPolicy: Always
+        EOF
+        
+    - name: Verify hello-spt-rumprun-block deployment
+      run: |
+        kubectl wait --for=condition=Succeeded pod/hello-spt-rumprun-block --timeout=180s || true
+        kubectl logs hello-spt-rumprun-block | tee /tmp/logs.txt
+        if ! grep "Hello world" /tmp/logs.txt; then
+          echo "=== LOGS ==="
+          cat /tmp/logs.txt
+          exit 1
+        fi
+        kubectl describe pod hello-spt-rumprun-block || true
+        
+    - name: Debug pod failure
+      if: failure()
+      run: |
+        echo "=== Debugging failure ==="
+        echo "=== Describe Pod ==="
+        if [ "${{ matrix.arch }}" = "amd64" ]; then
+          echo "=== Debugging hello-spt-rumprun-block (amd64) ==="
+          kubectl describe pod hello-spt-rumprun-block || true
+          echo "=== Logs ==="
+          kubectl logs hello-spt-rumprun-block || true
+        else
+          echo "=== Debugging hello-spt-rumprun-block (arm64) ==="
+          kubectl describe pod hello-spt-rumprun-block || true
+          echo "=== Logs ==="
+          kubectl logs hello-spt-rumprun-block || true
+        fi
+        
