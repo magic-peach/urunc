@@ -89,4 +89,3 @@ jobs:
       firecracker_version: 'v1.7.0'
       solo5_version: 'v0.9.3'
       kind_version: '0.29.0'
-    secrets: inherit
