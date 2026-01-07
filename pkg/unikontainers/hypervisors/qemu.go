@@ -64,7 +64,7 @@ func (q *Qemu) BuildExecCmd(args types.ExecArgs, ukernel types.Unikernel) ([]str
 	cmdString += " -nographic -vga none" // Disable graphic output
 
 	if args.VCPUs > 0 {
-		cmdString += fmt.Sprintf(" -smp %d", args.VCPUs)
+		cmdString += fmt.Sprintf(" -smp %d,cores=1,threads=1,sockets=%d,maxcpus=%d", args.VCPUs, args.VCPUs, args.VCPUs)
 	}
 
 	if args.Seccomp {
