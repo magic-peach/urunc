@@ -364,6 +364,8 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 			uniklog.Errorf("could not update guest's initrd: %v", err)
 			return err
 		}
+		uniklog.Errorf("inject failure for testing")
+		return fmt.Errorf("Just an injected error")
 	case "virtiofs":
 		tmpfsSize = chooseTmpfsSize(vmmArgs.MemSizeB)
 		fallthrough
