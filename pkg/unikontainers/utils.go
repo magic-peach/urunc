@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"syscall"
 	"strconv"
 	"strings"
 	"time"
@@ -371,6 +372,21 @@ func executeHook(hook specs.Hook, state []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed hook: %s stdout: %s stderr %s error: %w", hook.Path, stdout.String(), stderr.String(), err)
 	}
+
+	return nil
+}
+
+// CreateNetBSDInterfaceConfig writes the static IP configuration to /etc/ifconfig.[iface]
+func createNetBSDInterfaceConfig(rootfs string, ip string, netmask string, gw string) error {
+	netConfigFile := filepath.Join(rootfs, "etc/include/urunc_netconfig")
+	content := fmt.Sprintf("IP=%s\nMASK=%s\nGW=%s\n", ip, netmask, gw)
+
+	err := os.WriteFile(netConfigFile, []byte(content), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write interface file: %w", err)
+	}
+
+	syscall.Sync()
 
 	return nil
 }

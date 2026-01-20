@@ -358,6 +358,13 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 	tmpfsSize := "65536k"
 	switch rootfsParams.Type {
 	case "block":
+		if unikernelType == "netbsd" {
+			err = createNetBSDInterfaceConfig(rootfsParams.MountedPath, netArgs.IP, netArgs.Mask, netArgs.Gateway)
+			if err != nil {
+				uniklog.Errorf("could not write files for net config in netbsd: %v", err)
+				return err
+			}
+		}
 		blockArgs, err = handleBlockBasedRootfs(rootfsParams, unikernel, unikernelType, unikernelPath, uruncJSONFilename, initrdPath, u.Spec.Mounts)
 		if err != nil {
 			uniklog.Errorf("could not setup block based rootfs: %v", err)
