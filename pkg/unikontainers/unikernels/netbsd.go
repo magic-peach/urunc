@@ -28,6 +28,7 @@ type NetBSD struct {
 	Monitor string
 	Net     NetBSDNet
 	Block   []NetBSDBlock
+	RootfsImg  bool
 }
 
 type NetBSDNet struct {
@@ -42,7 +43,10 @@ type NetBSDBlock struct {
 }
 
 func (n *NetBSD) CommandString() (string, error) {
-	return "console=com root=ld0a", nil
+	if n.RootfsImg {
+		return "console=com root=ld0a", nil
+	}
+	return "console=com root=NAME=baseroot", nil
 }
 
 func (n *NetBSD) SupportsBlock() bool {
@@ -125,6 +129,10 @@ func (n *NetBSD) Init(data types.UnikernelParams) error {
 
 	n.Command = strings.Join(data.CmdLine, " ")
 	n.Monitor = data.Monitor
+	n.RootfsImg = false
+	if data.Rootfs.MountedPath != "" {
+		n.RootfsImg = true
+	}
 
 	return nil
 }
