@@ -1,6 +1,10 @@
 # urunc
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10840/badge)](https://www.bestpractices.dev/projects/10840)
+[![LFX Health Score](https://insights.linuxfoundation.org/api/badge/health-score?project=urunc)](https://insights.linuxfoundation.org/project/urunc)
+
+[![urunc CI (nightly)](https://github.com/urunc-dev/urunc/actions/workflows/ci_nightly.yml/badge.svg)](https://github.com/urunc-dev/urunc/actions/workflows/ci_nightly.yml)
+[![🍜 Build/publish urunc-deploy](https://github.com/urunc-dev/urunc/actions/workflows/build-trigger.yml/badge.svg)](https://github.com/urunc-dev/urunc/actions/workflows/build-trigger.yml)
 
 Welcome to `urunc`, the "runc for unikernels".
 
