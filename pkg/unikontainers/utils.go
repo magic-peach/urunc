@@ -263,6 +263,9 @@ func fileExists(fpath string) bool {
 func findNS(namespaces []specs.LinuxNamespace, nsType specs.LinuxNamespaceType) (string, error) {
 	for _, ns := range namespaces {
 		if ns.Type == nsType {
+			if ns.Path == "" {
+				return "", nil
+			}
 			err := checkValidNsPath(ns.Path)
 			if err != nil {
 				return "", err
