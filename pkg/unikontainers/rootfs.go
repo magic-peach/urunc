@@ -25,6 +25,15 @@ import (
 	"github.com/urunc-dev/urunc/pkg/unikontainers/types"
 )
 
+type rootfsConstructor interface {
+	preSetup()
+	setup()
+	postSetup()
+	getBlockDevs()
+	getSharedDirs()
+	preStart()
+}
+
 // rootfsSelector encapsulates the context for rootfs selection
 type rootfsSelector struct {
 	bundle     string

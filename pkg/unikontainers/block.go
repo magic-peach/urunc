@@ -107,7 +107,7 @@ func getMountInfo(path string) (types.BlockDevParams, error) {
 // files from old rootfsPath to newRootfsPath
 // FIXME: This approach fills up /run with unikernel binaries, initrds and urunc.json
 // files for each unikernel we run
-func extractFilesFromBlock(rootfsPath string, newRootfsPath string, unikernel string, uruncJSON string, initrd string) error {
+func extractBootFiles(rootfsPath string, newRootfsPath string, unikernel string, uruncJSON string, initrd string) error {
 	currentUnikernelPath := filepath.Join(rootfsPath, unikernel)
 	targetUnikernelPath := filepath.Join(newRootfsPath, unikernel)
 	targetUnikernelDir, _ := filepath.Split(targetUnikernelPath)
@@ -140,11 +140,11 @@ func extractFilesFromBlock(rootfsPath string, newRootfsPath string, unikernel st
 // directory. Then it unmounts the devmapper device and renames the temporary
 // directory as the container rootfs. This is needed to keep the same paths
 // for the unikernel files.
-func prepareDMAsBlock(rootfsPath string, newRootfsPath string, unikernel string, uruncJSON string, initrd string) error {
+func extractAndUnmount(rootfsPath string, newRootfsPath string, unikernel string, uruncJSON string, initrd string) error {
 	// extract unikernel
 	// FIXME: This approach fills up /run with unikernel binaries and
 	// urunc.json files for each unikernel instance we run
-	err := extractFilesFromBlock(rootfsPath, newRootfsPath, unikernel, uruncJSON, initrd)
+	err := extractBootFiles(rootfsPath, newRootfsPath, unikernel, uruncJSON, initrd)
 	if err != nil {
 		return err
 	}
@@ -199,7 +199,7 @@ func handleCntrRootfsAsBlock(rfs types.RootfsParams, unikernelType string, unike
 		return types.BlockDevParams{}, err
 	}
 
-	err = prepareDMAsBlock(rfs.MountedPath, rfs.MonRootfs, unikernelPath, uruncJSONFilename, initrdPath)
+	err = extractAndUnmount(rfs.MountedPath, rfs.MonRootfs, unikernelPath, uruncJSONFilename, initrdPath)
 	if err != nil {
 		return types.BlockDevParams{}, err
 	}
@@ -286,4 +286,73 @@ func handleBlockBasedRootfs(rfs types.RootfsParams, ukernel types.Unikernel, uni
 	blockArgs = append(blockArgs, blockFromMounts...)
 
 	return blockArgs, nil
+}
+
+func (r *types.RootfsParams) preSetup(kernelPath string, mounts []specs.Mount, uruncJSONFilename string, initrdPath string) error {
+	if r.MountedPath == "" {
+		return nil
+	}
+
+	err := copyMountfiles(r.MountedPath, mounts)
+	if err != nil {
+		return fmt.Errorf("failed to copy files from mount list: %w", err)
+	}
+
+	// FIXME: This approach fills up /run with unikernel binaries and
+	// urunc.json files for each unikernel instance we run
+	err := extractBootFiles(r.MountedPath, r.MonRootfs, kernelPath, uruncJSONFilename, initrdPath)
+	if err != nil {
+		return fmt.Errorf("failed to extract boot files from rootfs: %w", err)
+	}
+
+	err = mount.Unmount(r.MountedPath)
+	if err != nil {
+		return fmt.Errorf("failed to unmount rootfs: %w", err)
+	}
+
+	return nil
+}
+
+func (r *types.RootfsParams) postSetup() error {
+	err = setupDev(r.MonRootfs, r.Path)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *types.RootfsParams) getBlockDevs(mounts []specs.Mount, unikernelType string, ukernel types.Unikernel) ([]types.BlockDevParams, error) {
+	var blockArgs []types.BlockDevParams
+	rootfsBlock := types.BlockDevParams {
+		Source:     r.Path,
+		MountPoint: "/",
+		ID:         "rootfs",
+	}
+
+	// NOTE: Rumprun does not allow us to mount
+	// anything at '/'. As a result, we use the
+	// /data mount point for Rumprun. For all the
+	// other guests we use '/'.
+	if unikernelType == "rumprun" {
+		rootfsBlock.MountPoint = "/data"
+	}
+
+	blockArgs = append(blockArgs, rootfsBlock)
+	blockFromMounts, err := getBlockVolumes(r.MonRootfs, mounts, ukernel)
+	if err != nil {
+		return nil, err
+	}
+	blockArgs = append(blockArgs, blockFromMounts...)
+
+	return blockArgs, nil
+}
+
+// TODO: Return an array instead of a single struct
+func (r *types.RootfsParams) getSharedDirs() (types.SharedfsParams, error) {
+	return types.SharedfsParams{}, nil
+}
+
+func (r *types.RootfsParams) preStart() error {
+	return nil
 }
