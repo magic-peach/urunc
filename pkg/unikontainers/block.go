@@ -30,6 +30,13 @@ import (
 
 var ErrMountpoint = errors.New("no FS is mounted in this mountpoint")
 
+type blockRootfs struct {
+	mounts []specs.Mount
+	monRootfs string
+	mountedPath string
+	path string
+}
+
 // getMountInfo determines whether the provided path is a mount point
 // by inspecting /proc/self/mountinfo.
 // If the path is a mount point, it populates and returns a BlockDevParams struct.
@@ -263,49 +270,38 @@ func getBlockVolumes(monRootfs string, mounts []specs.Mount, ukernel types.Unike
 	return blkImgs, nil
 }
 
-func handleBlockBasedRootfs(rfs types.RootfsParams, ukernel types.Unikernel, unikernelType string, unikernelPath string, uruncJSONFilename string, initrdPath string, mounts []specs.Mount) ([]types.BlockDevParams, error) {
-	var blockArgs []types.BlockDevParams
-	var rootfsBlock types.BlockDevParams
-	var err error
-	if rfs.MountedPath == "" {
-		// The Mountpoint in the annotation was "/" and hence the rootfs
-		// of the guest is a block Image inside the container's image.
-		rootfsBlock, err = handleExplicitBlockImage(rfs.Path, "/")
-	} else {
-		rootfsBlock, err = handleCntrRootfsAsBlock(rfs, unikernelType, unikernelPath, uruncJSONFilename, initrdPath, mounts)
-	}
+func handleBlockBasedRootfs(rfs blockRootfs, ukernel types.Unikernel, unikernelType string, unikernelPath string, uruncJSONFilename string, initrdPath string, mounts []specs.Mount) ([]types.BlockDevParams, error) {
+	err := rfs.postSetup()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("post setup step for block based rootfs failed: %w", err)
 	}
-	rootfsBlock.ID = "rootfs"
-	blockArgs = append(blockArgs, rootfsBlock)
-	blockFromMounts, err := getBlockVolumes(rfs.MonRootfs, mounts, ukernel)
-	if err != nil {
-		return nil, err
-	}
-	blockArgs = append(blockArgs, blockFromMounts...)
 
-	return blockArgs, nil
+	blockArgs, err := rfs.getBlockDevs(unikernelType, ukernel)
+	if err != nil {
+		err = fmt.Errorf("failed to get block devices to attach in sandbox: %w", err)
+	}
+
+	return blockArgs, err
 }
 
-func (r *types.RootfsParams) preSetup(kernelPath string, mounts []specs.Mount, uruncJSONFilename string, initrdPath string) error {
-	if r.MountedPath == "" {
+func (b blockRootfs) preSetup(kernelPath string, uruncJSONFilename string, initrdPath string) error {
+	if b.mountedPath == "" {
 		return nil
 	}
 
-	err := copyMountfiles(r.MountedPath, mounts)
+	err := copyMountfiles(b.mountedPath, b.mounts)
 	if err != nil {
 		return fmt.Errorf("failed to copy files from mount list: %w", err)
 	}
 
 	// FIXME: This approach fills up /run with unikernel binaries and
 	// urunc.json files for each unikernel instance we run
-	err := extractBootFiles(r.MountedPath, r.MonRootfs, kernelPath, uruncJSONFilename, initrdPath)
+	err = extractBootFiles(b.mountedPath, b.monRootfs, kernelPath, uruncJSONFilename, initrdPath)
 	if err != nil {
 		return fmt.Errorf("failed to extract boot files from rootfs: %w", err)
 	}
 
-	err = mount.Unmount(r.MountedPath)
+	err = mount.Unmount(b.mountedPath)
 	if err != nil {
 		return fmt.Errorf("failed to unmount rootfs: %w", err)
 	}
@@ -313,8 +309,8 @@ func (r *types.RootfsParams) preSetup(kernelPath string, mounts []specs.Mount, u
 	return nil
 }
 
-func (r *types.RootfsParams) postSetup() error {
-	err = setupDev(r.MonRootfs, r.Path)
+func (b blockRootfs) postSetup() error {
+	err := setupDev(b.monRootfs, b.path)
 	if err != nil {
 		return err
 	}
@@ -322,10 +318,10 @@ func (r *types.RootfsParams) postSetup() error {
 	return nil
 }
 
-func (r *types.RootfsParams) getBlockDevs(mounts []specs.Mount, unikernelType string, ukernel types.Unikernel) ([]types.BlockDevParams, error) {
+func (b blockRootfs) getBlockDevs(unikernelType string, ukernel types.Unikernel) ([]types.BlockDevParams, error) {
 	var blockArgs []types.BlockDevParams
 	rootfsBlock := types.BlockDevParams {
-		Source:     r.Path,
+		Source:     b.path,
 		MountPoint: "/",
 		ID:         "rootfs",
 	}
@@ -339,7 +335,7 @@ func (r *types.RootfsParams) getBlockDevs(mounts []specs.Mount, unikernelType st
 	}
 
 	blockArgs = append(blockArgs, rootfsBlock)
-	blockFromMounts, err := getBlockVolumes(r.MonRootfs, mounts, ukernel)
+	blockFromMounts, err := getBlockVolumes(b.monRootfs, b.mounts, ukernel)
 	if err != nil {
 		return nil, err
 	}
@@ -349,10 +345,10 @@ func (r *types.RootfsParams) getBlockDevs(mounts []specs.Mount, unikernelType st
 }
 
 // TODO: Return an array instead of a single struct
-func (r *types.RootfsParams) getSharedDirs() (types.SharedfsParams, error) {
+func (b blockRootfs) getSharedDirs() (types.SharedfsParams, error) {
 	return types.SharedfsParams{}, nil
 }
 
-func (r *types.RootfsParams) preStart() error {
+func (b blockRootfs) preStart() error {
 	return nil
 }

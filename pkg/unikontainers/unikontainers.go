@@ -402,6 +402,20 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 		return err
 	}
 
+	if rootfsParams.Type == "block" {
+		bRootfs :=  blockRootfs {
+			mounts: u.Spec.Mounts,
+			monRootfs: rootfsParams.MonRootfs,
+			mountedPath: rootfsParams.MountedPath,
+			path: rootfsParams.Path,
+		}
+
+		err = bRootfs.preSetup(unikernelPath, uruncJSONFilename, initrdPath)
+		if err != nil {
+			return fmt.Errorf("failed to perapre block based rootfs: %w", err)
+		}
+	}
+
 	// Prepare Monitor rootfs
 	// Make sure that rootfs is mounted with the correct propagation
 	// flags so we can later pivot if needed.
@@ -426,7 +440,14 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 	tmpfsSize := "65536k"
 	switch rootfsParams.Type {
 	case "block":
-		blockArgs, err = handleBlockBasedRootfs(rootfsParams, unikernel, unikernelType, unikernelPath, uruncJSONFilename, initrdPath, u.Spec.Mounts)
+		bRootfs :=  blockRootfs {
+			mounts: u.Spec.Mounts,
+			monRootfs: rootfsParams.MonRootfs,
+			mountedPath: rootfsParams.MountedPath,
+			path: rootfsParams.Path,
+		}
+
+		blockArgs, err = handleBlockBasedRootfs(bRootfs, unikernel, unikernelType, unikernelPath, uruncJSONFilename, initrdPath, u.Spec.Mounts)
 		if err != nil {
 			uniklog.Errorf("could not setup block based rootfs: %v", err)
 			return err
