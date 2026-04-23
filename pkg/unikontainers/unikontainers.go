@@ -434,7 +434,8 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 			monRootfs: rootfsParams.MonRootfs,
 			mountedPath: rootfsParams.MountedPath,
 			sfsType: rootfsParams.Type,
-			vfsPath: virtiofsdConfig.Path, 
+			vfsdConfig: virtiofsdConfig,
+			sharedPath: containerRootfsMountPath,
 			memory: vmmArgs.MemSizeB,
 		}
 		// Update the paths of the files we need to pass in the monitor process.
@@ -570,13 +571,9 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 		return err
 	}
 
-	// virtiofs
-	if rootfsParams.Type == "virtiofs" {
-		// Start the virtiofsd process
-		err = spawnVirtiofsd(virtiofsdConfig, containerRootfsMountPath)
-		if err != nil {
-			return err
-		}
+	err = rfsBuilder.preStart()
+	if err != nil {
+		return err
 	}
 
 	uniklog.Debug("calling vmm execve")

@@ -30,7 +30,8 @@ const tmpfsSizeFor9pfsRootfs = "65536k"
 
 type sharedfsRootfs struct {
 	mounts []specs.Mount
-	vfsPath string
+	vfsdConfig types.ExtraBinConfig
+	sharedPath string
 	monRootfs string
 	mountedPath string
 	sfsType string
@@ -56,9 +57,9 @@ func (s sharedfsRootfs) postSetup() error {
 
 	if s.sfsType == "virtiofs" {
 		// Get the virtiofsd binary from host in monRootfs
-		err = fileFromHost(s.monRootfs, s.vfsPath, "", unix.MS_BIND|unix.MS_PRIVATE, false)
+		err = fileFromHost(s.monRootfs, s.vfsdConfig.Path, "", unix.MS_BIND|unix.MS_PRIVATE, false)
 		if err != nil {
-			return fmt.Errorf("Could not bind mount %s: %w", s.vfsPath, err)
+			return fmt.Errorf("Could not bind mount %s: %w", s.vfsdConfig.Path, err)
 		}
 	}
 
@@ -85,7 +86,12 @@ func (s sharedfsRootfs) getSharedDirs() (types.SharedfsParams, error) {
 }
 
 func (s sharedfsRootfs) preStart() error {
-	return nil
+	// Start the virtiofsd process
+	err := spawnVirtiofsd(s.vfsdConfig, s.sharedPath)
+	if err != nil {
+		err = fmt.Errorf("failed to start virtiofsd: %w", err)
+	}
+	return err
 }
 
 func chooseTmpfsSize(sfsType string, mem uint64) string {
