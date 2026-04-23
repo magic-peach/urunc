@@ -409,7 +409,6 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 	var rfsBuilder rootfsBuilder
 	blockArgs := []types.BlockDevParams{}
 	sharedfsArgs := types.SharedfsParams{}
-	tmpfsSize := "65536k"
 	switch rootfsParams.Type {
 	case "block":
 		rfsBuilder =  blockRootfs {
@@ -427,17 +426,16 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 		rfsBuilder =  initrdRootfs {
 			mounts: u.Spec.Mounts,
 			initrdHostFullPath: filepath.Join(rootfsParams.MonRootfs, rootfsParams.Path),
+			monRootfs: rootfsParams.MonRootfs,
 		}
-	case "virtiofs":
-		tmpfsSize = chooseTmpfsSize(vmmArgs.MemSizeB)
-		fallthrough
-	case "9pfs":
+	case "virtiofs", "9pfs":
 		rfsBuilder =  sharedfsRootfs {
 			mounts: u.Spec.Mounts,
 			monRootfs: rootfsParams.MonRootfs,
 			mountedPath: rootfsParams.MountedPath,
 			sfsType: rootfsParams.Type,
 			vfsPath: virtiofsdConfig.Path, 
+			memory: vmmArgs.MemSizeB,
 		}
 		// Update the paths of the files we need to pass in the monitor process.
 		vmmArgs.UnikernelPath = adjustPathsForSharedfs(vmmArgs.UnikernelPath)
@@ -489,12 +487,6 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 
 	unikernelParams.Rootfs = rootfsParams
 
-	err = createTmpfs(rootfsParams.MonRootfs, "/tmp",
-		unix.MS_NOSUID|unix.MS_NOEXEC|unix.MS_STRICTATIME,
-		"1777", tmpfsSize)
-	if err != nil {
-		return err
-	}
 	metrics.Capture(m.TS17)
 
 	// unikernelParams
