@@ -1,12 +1,12 @@
 name: Add Git Trailers to PR commits
 
 on:
-  workflow_call:
-    secrets:
-      GIT_CLONE_PAT:
-        required: false
-      URUNC_BOT_PRIVATE_KEY:
-        required: true
+  pull_request_review:
+    types: [submitted]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -14,25 +14,16 @@ permissions:
 jobs:
   git-trailers:
     name: Add Git Trailers
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-22.04
-    continue-on-error: true
-    permissions:
-      contents: write
-      pull-requests: write
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.review.state == 'approved' &&
+      github.event.pull_request.rebaseable != false
+    runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@ec9f2d5744a09debf3a187a3f4f675c53b671911 # v2.13.0
         with:
           egress-policy: audit
-
-      - name: Exit if PR is not rebaseable
-        if: ${{ github.event.pull_request.rebaseable != null && github.event.pull_request.rebaseable == false }}
-        run: exit 1
 
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -41,7 +32,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Append git trailers
-        uses: nubificus/git-trailers@8e08c91bb4c1fd9cb1ccbd9cc8029c31acf8da66 # feat_use_rebase
+        uses: nubificus/git-trailers@e3cefe03237a8a33f12ee41a8194bfb03a4d179b # fix_auto_merge
         with:
           user_info: .github/contributors.yaml
 
@@ -52,20 +43,9 @@ jobs:
           app-id: ${{ vars.URUNC_BOT_APP_ID }}
           private-key: ${{ secrets.URUNC_BOT_PRIVATE_KEY }}
 
-      - name: Set up Git
-        run: |
-          git config --global user.name "urunc-bot[bot]"
-          git config --global user.email "urunc-bot[bot]@users.noreply.github.com"
-
-      - name: Append git trailers
-        uses: nubificus/git-trailers@18fd322f3fbfd505b4de728974a4ac1f32f758a7 # feat_auto_merge
-        with:
-          user_info: .github/contributors.yaml
-
       - name: Merge PR
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          PR_URL=${{ github.event.pull_request.html_url }}
-      
           gh pr merge "$PR_URL" --rebase --admin
