@@ -17,7 +17,8 @@ jobs:
     if: >-
       github.event.pull_request.base.ref == 'main' &&
       github.event.review.state == 'approved' &&
-      github.event.pull_request.rebaseable != false
+      (github.event.pull_request.rebaseable == null ||
+      github.event.pull_request.rebaseable == true)  
     runs-on: ubuntu-22.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -25,9 +26,17 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Generate urunc-bot token
+        id: generate-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
+        with:
+          app-id: ${{ vars.URUNC_BOT_APP_ID }}
+          private-key: ${{ secrets.URUNC_BOT_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          token: ${{ steps.generate-token.outputs.token }}
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -35,13 +44,6 @@ jobs:
         uses: nubificus/git-trailers@e3cefe03237a8a33f12ee41a8194bfb03a4d179b # fix_auto_merge
         with:
           user_info: .github/contributors.yaml
-
-      - name: Generate urunc-bot token
-        id: generate-token
-        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859 # v3.0.0
-        with:
-          app-id: ${{ vars.URUNC_BOT_APP_ID }}
-          private-key: ${{ secrets.URUNC_BOT_PRIVATE_KEY }}
 
       - name: Merge PR
         env:
