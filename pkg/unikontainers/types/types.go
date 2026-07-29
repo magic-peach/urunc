@@ -142,3 +142,14 @@ type MonitorConfig struct {
 	DataPath        string `toml:"data_path,omitempty"` // Optional path to the hypervisor data files (e.g. qemu bios stuff)
 	Vhost           bool   `toml:"vhost,omitempty"`     // Optional: enable vhost for network performance optimization
 }
+
+// MonitorSpec is everything the post-pivot urunc process needs in order to
+// finalize the monitor's process execution environment and exec the monitor.
+type MonitorSpec struct {
+	ContainerID   string          `json:"containerID"`
+	UnikernelType string          `json:"unikernelType"`
+	MonitorType   string          `json:"monitorType"`
+	MonitorCfg    MonitorConfig   `json:"monitorCfg"`
+	ExecArgs      ExecArgs        `json:"execArgs"`
+	GuestParams   UnikernelParams `json:"guestParams"`
+}
