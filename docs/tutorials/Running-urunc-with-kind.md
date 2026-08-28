@@ -89,7 +89,15 @@ Configure the `kind` cluster to allow KVM access for running unikernels.
        extraMounts:
          - hostPath: /dev/kvm
            containerPath: /dev/kvm
+       extraPortMappings:
+         - containerPort: 30080   # must match the Service's nodePort in Step 5
+           hostPort: 8080
+           protocol: TCP
    ```
+
+   The `extraPortMappings` entry forwards a port from the host into the `kind`
+   node container. Without it, the NGINX unikernel we deploy later would only
+   be reachable from inside the `kind` Docker network, not from the host.
 
 3. **Create the cluster**:
    ```bash
@@ -159,7 +167,7 @@ Install `urunc`, hypervisors, and dependencies inside the `kind` node container.
 
 7. **Install urunc**:
    ```bash
-   git clone https://github.com/nubificus/urunc.git
+   git clone https://github.com/urunc-dev/urunc.git
    cd urunc
    make
    make install
@@ -188,9 +196,16 @@ Install `urunc`, hypervisors, and dependencies inside the `kind` node container.
    ```
 
 9. **Add urunc to containerd**:
+
+   Current `containerd` releases (v2.x, including the one shipped in `kind`
+   node images) split the old `io.containerd.grpc.v1.cri` plugin into
+   separate image and runtime plugins, and runtime handlers now live under
+   `io.containerd.cri.v1.runtime` instead. Append the `urunc` runtime entry
+   using the current plugin ID:
+
    ```bash
    cat <<EOF | tee -a /etc/containerd/config.toml
-   [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.urunc]
+   [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.urunc]
      runtime_type = "io.containerd.urunc.v2"
      container_annotations = ["com.urunc.unikernel.*"]
      pod_annotations = ["com.urunc.unikernel.*"]
@@ -260,6 +275,34 @@ Define the `urunc` RuntimeClass for Kubernetes.
    kubectl apply -f nginx-urunc.yaml
    ```
 
+3. **Create nginx-urunc-nodeport.yaml**:
+
+   `kind` nodes run as Docker containers on a private Docker network, so the
+   Pod's `ClusterIP` isn't reachable from the host on its own. Expose the Pod
+   through a `NodePort` Service, using the port mapped in `kind-config.yaml`:
+
+   ```bash
+   cat <<EOF | tee nginx-urunc-nodeport.yaml
+   apiVersion: v1
+   kind: Service
+   metadata:
+     name: nginx-urunc-svc
+   spec:
+     type: NodePort
+     selector:
+       run: nginx-urunc
+     ports:
+       - port: 80
+         targetPort: 80
+         nodePort: 30080   # must match containerPort in kind-config.yaml
+   EOF
+   ```
+
+4. **Apply nginx-urunc-nodeport.yaml**:
+   ```bash
+   kubectl apply -f nginx-urunc-nodeport.yaml
+   ```
+
 ### Step 6: Verify the Deployment
 
 1. **Check Pods**:
@@ -295,6 +338,19 @@ Define the `urunc` RuntimeClass for Kubernetes.
    [    1.509741] Info: [libukboot] <boot.c @  359> Constructor table at 0x29f0d8 - 0x29f0d8
    [    1.547873] Info: [libukboot] <boot.c @  369> Calling main(3, ['/unikernel/app-nginx_kvm-x86_64', '-c', '/nginx/conf/nginx.conf'])
    ```
+
+3. **Send a request to the NGINX unikernel**:
+
+   With the `NodePort` Service and the `kind-config.yaml` port mapping from
+   Step 2 in place, the unikernel is reachable from the host at
+   `localhost:8080`:
+
+   ```bash
+   curl http://localhost:8080
+   ```
+
+   You should get back the NGINX unikernel's default HTML response, confirming
+   that `urunc` is not just `Running` but actually serving traffic.
 
 ### Step 7: Verify urunc Runtime Usage
 
