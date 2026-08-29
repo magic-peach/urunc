@@ -27,6 +27,7 @@ import (
 	imagesapi "github.com/containerd/containerd/api/services/images/v1"
 	typesapi "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/log"
 
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	runtimespec "github.com/opencontainers/runtime-spec/specs-go"
@@ -39,6 +40,10 @@ type annotationFetcher struct {
 	contentClient   contentapi.ContentClient
 	namespace       string
 	target          *typesapi.Descriptor
+	// dockerImageLabels holds urunc annotations recovered through the
+	// Docker Engine API fallback (see fetchDockerImageLabels), used when
+	// the container has no containerd-resolvable image reference.
+	dockerImageLabels map[string]string
 }
 
 func newAnnotationFetcher(ctx context.Context, session *Session) (*annotationFetcher, error) {
@@ -54,10 +59,27 @@ func newAnnotationFetcher(ctx context.Context, session *Session) (*annotationFet
 	}
 
 	if container.Image == "" {
-		// TODO: Add Docker fallback. When Docker does not use containerd's image/content
-		// store, the containerd container metadata may not include an image reference.
-		// In that case, resolve the image reference through the Docker Engine API and
-		// fetch manifest annotations from a Docker-compatible path.
+		// When Docker is not configured to use containerd's image/content
+		// store (its default, classic storage), Docker still creates the
+		// container through containerd, so containerLabels above is
+		// populated as usual. However, the image itself was pulled and
+		// stored by Docker directly, so there is no containerd image
+		// record to resolve here, and container.Image is empty.
+		//
+		// containerd's image/content store is what lets us read the raw
+		// OCI manifest and its Annotations further down. Classic Docker
+		// storage does not retain that manifest wrapper at all, so we
+		// cannot recover manifest annotations in this case. What Docker
+		// does expose, through its own Engine API, is the image's OCI
+		// config Labels (i.e. Dockerfile LABEL instructions), which is
+		// the closest Docker-compatible equivalent. Fetch those as a
+		// best-effort fallback.
+		labels, err := fetchDockerImageLabels(ctx, session.GetContainerID())
+		if err != nil {
+			log.G(ctx).WithError(err).Debug("urunc(shim): docker annotation fallback unavailable")
+			return fetcher, nil
+		}
+		fetcher.dockerImageLabels = labels
 		return fetcher, nil
 	}
 
@@ -94,6 +116,17 @@ func (f *annotationFetcher) fetchUruncAnnotations(ctx context.Context) (map[stri
 
 	// Collect urunc annotations from container labels.
 	for k, v := range f.containerLabels {
+		if strings.HasPrefix(k, uruncPrefix) {
+			filtered[k] = v
+		}
+	}
+
+	// Collect urunc annotations recovered through the Docker Engine API
+	// fallback (only populated when there was no containerd image to
+	// resolve a manifest from, see newAnnotationFetcher). These take
+	// precedence over container labels, the same way manifest annotations
+	// do below, since they represent the same image-level metadata.
+	for k, v := range f.dockerImageLabels {
 		if strings.HasPrefix(k, uruncPrefix) {
 			filtered[k] = v
 		}
