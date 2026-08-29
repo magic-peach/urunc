@@ -20,6 +20,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
+	"github.com/urunc-dev/urunc/pkg/unikontainers"
 )
 
 var runUsage = `<container-id>
@@ -66,9 +67,23 @@ var runCommand = &cli.Command{
 			return err
 		}
 
-		// FIXME: This is a refactor of what the previous code did, however I have a feeling
-		// that it will not work...
-		if err := reexecUnikontainer(cmd); err != nil {
+		// run combines create and start in a single invocation, so it
+		// needs to go through the same steps as the create command:
+		// createUnikontainer spawns the reexec process in the background
+		// and waits for it to be ready to receive the StartExecve message.
+		// Only then can startUnikontainer signal the reexec process to
+		// actually execve into the monitor and wait for it to report a
+		// successful start.
+		//
+		// NOTE: this used to call reexecUnikontainer directly instead of
+		// createUnikontainer. reexecUnikontainer is meant to run inside the
+		// reexec'd child process spawned by createUnikontainer (it reads
+		// the _LIBCONTAINER_INITPIPE/_LIBCONTAINER_LOGPIPE file descriptors
+		// that createUnikontainer passes to that child), so calling it here,
+		// in the original urunc process, always failed before
+		// startUnikontainer ever ran.
+		uruncCfg, _ := unikontainers.LoadUruncConfig(unikontainers.ResolveUruncConfigPath()) // ignore the error and use default config
+		if err := createUnikontainer(cmd, uruncCfg); err != nil {
 			return err
 		}
 		if err := startUnikontainer(cmd); err != nil {
