@@ -98,6 +98,7 @@ func getMountInfo(path string) (types.BlockDevParams, error) {
 			// Keep the mount VFS options (field 6 of mountinfo)
 			// to restore them later in the delete path.
 			blockDev.MountOptions = preDash[5]
+			blockDev.ReadOnly = mountOptionsReadOnly(preDash[5])
 			blockDev.ID = ""
 			continue
 		}
@@ -122,6 +123,18 @@ func getMountInfo(path string) (types.BlockDevParams, error) {
 	}
 
 	return blockDev, nil
+}
+
+// mountOptionsReadOnly reports whether a comma-separated VFS mount option
+// string, as reported in field 6 of /proc/self/mountinfo (e.g.
+// "ro,relatime"), marks the mount read-only.
+func mountOptionsReadOnly(mountOptions string) bool {
+	for _, o := range strings.Split(mountOptions, ",") {
+		if o == "ro" {
+			return true
+		}
+	}
+	return false
 }
 
 // extractUnikernelFromBlock moves unikernel binary, initrd and urunc.json

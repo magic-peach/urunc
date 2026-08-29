@@ -175,8 +175,9 @@ func (l *Linux) MonitorBlockCli() []types.MonitorBlockArgs {
 				id = "FC" + aBlock.ID
 			}
 			blkArgs = append(blkArgs, types.MonitorBlockArgs{
-				ID:   id,
-				Path: aBlock.Source,
+				ID:       id,
+				Path:     aBlock.Source,
+				ReadOnly: aBlock.ReadOnly,
 			})
 		}
 	case "cloud-hypervisor":

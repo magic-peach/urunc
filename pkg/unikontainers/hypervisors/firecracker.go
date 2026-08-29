@@ -160,7 +160,7 @@ func (fc *Firecracker) BuildExecCmd(args types.ExecArgs, ukernel types.Unikernel
 	for _, blockArg := range bArgs {
 		aBlock := FirecrackerDrive{
 			DriveID:   blockArg.ID,
-			IsRO:      false,
+			IsRO:      blockArg.ReadOnly,
 			IsRootDev: false,
 			HostPath:  blockArg.Path,
 		}

@@ -61,6 +61,9 @@ type BlockDevParams struct {
 	HostMountPoint string
 	LoopAutoclear  bool
 	MountOptions   string
+	// ReadOnly is derived from MountOptions and reports whether the host
+	// mount backing this block device is currently mounted read-only.
+	ReadOnly bool
 }
 
 type SharedfsParams struct {
@@ -124,6 +127,9 @@ type MonitorBlockArgs struct {
 	ID        string
 	Path      string
 	ExactArgs string
+	// ReadOnly reports whether the monitor should attach this block device
+	// as read-only.
+	ReadOnly bool
 }
 
 // ExtraBinConfig struct is used to hold specific configuration for extra binaries
