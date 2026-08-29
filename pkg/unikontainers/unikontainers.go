@@ -744,21 +744,22 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 		return err
 	}
 
-	// Notify urunc start that the monitor is ready to execute.
-	// We send this after BuildExecCmd succeeds to avoid reporting a container
-	// as started when the VMM command cannot be built.
-	// TODO: The container can still be reported as running if the PreExec step
-	// (e.g., BPF/seccomp filter setup) fails after this point. We should find
-	// a way to handle that case as well.
-	err = u.SendMessage(StartSuccess)
-	if err != nil {
-		return err
-	}
-
 	// Perform any monitor-specific pre-exec setup (e.g., seccomp filters for HVT).
 	err = vmm.PreExec(vmmArgs)
 	if err != nil {
 		uniklog.WithError(err).Error("failed to perform pre-exec setup")
+		return err
+	}
+
+	// Notify urunc start that the monitor is ready to execute.
+	// We send this only after BuildExecCmd and PreExec have both succeeded,
+	// so we never report the container as started if either step fails. If
+	// this function returns an error before reaching this point, the caller
+	// (reexecUnikontainer) sends StartErr instead, so urunc start's wait for
+	// StartSuccess correctly fails rather than reporting a false "running"
+	// state.
+	err = u.SendMessage(StartSuccess)
+	if err != nil {
 		return err
 	}
 
