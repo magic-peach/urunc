@@ -69,3 +69,9 @@ other container runtimes, they can still be stored and distributed via generic
 container registries, such as Docker Hub or Harbor. This ensures compatibility
 with standard cloud-native workflows for building, shipping, and deploying
 applications.
+
+## Further reading
+
+- [Block storage handling](./storage.md) describes how `urunc` hands off
+  block-based rootfs and volumes to the guest, including the loop-device
+  `autoclear` handling used for bind mounts.

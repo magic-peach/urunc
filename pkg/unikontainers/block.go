@@ -223,9 +223,8 @@ func getBlockVolumes(mounts []specs.Mount, ukernel types.Unikernel) ([]types.Blo
 			// and therefore the device will persist.
 			// NOTE: Although we restore the autoclear flag in the delete path,
 			// if delete is never called then the autoclear flag will never
-			// get restored.and remounted
-			// TODO: Add the above note in a documentation for storage
-			// handling
+			// get restored and remounted. See docs/design/storage.md for a
+			// detailed explanation of this behavior.
 			cleared, err := setLoopAutoclear(mInfo.Source, false)
 			if err != nil {
 				return nil, err
