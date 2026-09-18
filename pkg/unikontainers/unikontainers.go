@@ -766,14 +766,9 @@ func (u *Unikontainer) Exec(metrics m.Writer) error {
 		return err
 	}
 
-	// Notify urunc start that the monitor is ready to execute, only after the
-	// command builds so a container is never reported started when it cannot be.
-	err = u.SendMessage(StartSuccess)
-	if err != nil {
-		return err
-	}
-
-	return execMonitor(metrics, vmm, vmmArgs, execCmd)
+	return execMonitor(metrics, vmm, vmmArgs, execCmd, func() error {
+		return u.SendMessage(StartSuccess)
+	})
 }
 
 // confineToContainerRootfs ensures an image-controlled path stays under the
@@ -837,18 +832,20 @@ func confineBlockSources(blocks []types.BlockDevParams) ([]types.BlockDevParams,
 }
 
 // execMonitor runs the monitor's pre-exec setup and finally execve's the monitor.
-// It does not return on success:
-//
-// TODO: The container can still be reported as running if the PreExec step
-// (e.g., BPF/seccomp filter setup) fails after the caller reported success. We
-// should find a way to handle that case as well.
-func execMonitor(metrics m.Writer, vmm types.VMM, execArgs types.ExecArgs, execCmd []string) error {
+// It does not return on success. notifyReady is called only once PreExec
+// succeeds, so the caller never reports readiness for a monitor that then
+// fails its pre-exec setup.
+func execMonitor(metrics m.Writer, vmm types.VMM, execArgs types.ExecArgs, execCmd []string, notifyReady func() error) error {
 	uniklog.Debug("calling vmm execve")
 	metrics.Capture(m.TS18)
 	// Perform any monitor-specific pre-exec setup (e.g., seccomp filters for HVT).
 	err := vmm.PreExec(execArgs)
 	if err != nil {
 		uniklog.WithError(err).Error("failed to perform pre-exec setup")
+		return err
+	}
+
+	if err := notifyReady(); err != nil {
 		return err
 	}
 

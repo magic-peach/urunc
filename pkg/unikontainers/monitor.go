@@ -142,13 +142,9 @@ func runMonitor(metrics m.Writer, ms monitorSpec) error {
 		return err
 	}
 
-	// Report a successful setup to "urunc start" over the ready pipe, only after
-	// the command has been built. signalReady closes the pipe, so it is not left
-	// open in the monitor after the execve.
-	err = signalReady(true)
-	if err != nil {
-		return err
-	}
-
-	return execMonitor(metrics, vmm, ms.ExecArgs, execCmd)
+	// signalReady closes the ready pipe, so it is not left open in the monitor
+	// after the execve.
+	return execMonitor(metrics, vmm, ms.ExecArgs, execCmd, func() error {
+		return signalReady(true)
+	})
 }
